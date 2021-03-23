@@ -16,7 +16,7 @@ The needed libraries from there are:
 - adafruit_hcsr04
 - adafruit_motor
 
-  and probably  
+and probably  
   
 - adafruit_ble
 - adafruit_bluefruit_connect
