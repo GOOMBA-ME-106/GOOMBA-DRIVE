@@ -15,6 +15,8 @@ The needed libraries from there are:
 - adafruit_irremote
 - adafruit_hcsr04
 - adafruit_motor
+
   and probably  
+  
 - adafruit_ble
 - adafruit_bluefruit_connect
