@@ -94,21 +94,22 @@ class forward_state(state):
 
         elif event == "left":
             # some way to output distance of wall here
-
+            stuff = 0
         elif event == "right":
             # some way to output distance of wall here
-
+            stuff = 0
         elif event == "cliff":
+            stuff = 0
 
 
 class turn_state(state):
     def __init__(self):
-        idk
+        again = 0
 
 
 class idling_state(state):
     def __init__(self):
-        idk again
+        idk = again
 
 
 
@@ -179,11 +180,12 @@ def fuzzy_pulse_compare(pulse1, pulse2, fuzzyness=0.1): #interpret matching sing
     return True
 #fuzzy_pulse_compare(pulse, pulse2)
 
-def cliff_dist(ir stuff?):
-    idk yet lol
+def cliff_dist(ir_stuff):
+    ir_stuff = 0
 
 def vector_store(vec_list,outfile):
     # JSON stuff here?
+    json = "jason"
 
 
 # Main loop
