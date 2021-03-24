@@ -107,7 +107,10 @@ class turn_state(state):
         again = 1
         noty= 2 
         stuff_here = 1
-        testing_stuff = again + noty - stuff_here
+        testing_stuff = again + noty * stuff_here
+    
+    def stuff(thing):
+        coool = True
 
 
 class idling_state(state):
