@@ -3,7 +3,7 @@ When dealing with one of the issues on the github repository, create a separate 
 ![imagename](./images/create_branch.png)
 
 - **NOTE**: Once you have created a branch via this method, it takes the *version of main at that time* and clones it into the branch. If someone updates the main branch  before you are able to push your changes into the main branch, you want to pull that new version of the main branch into your branch so that the code will merge properly. **DO NOT** push to the main branch if the main branch has been changed before your changes and you have not pulled the changed main branch into your branch.
-- **NOTE #2**: always click 'Fetch origin' then 'Pull origin' when launching desktop github.
+- **NOTE #2**: ***always*** click 'Fetch origin' then 'Pull origin' when launching desktop github.
 
 To then make changes to solve your specific issue in your dedicated branch, go to the github desktop and choose your current branch. Click on this button and select your branch.
 
