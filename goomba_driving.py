@@ -104,7 +104,10 @@ class forward_state(state):
 
 class turn_state(state):
     def __init__(self):
-        again = 0
+        again = 1
+        noty= 2 
+        stuff_here = 1
+        testing_stuff = again + noty - stuff_here
 
 
 class idling_state(state):
