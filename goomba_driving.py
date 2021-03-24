@@ -51,9 +51,9 @@ PIN_IR = board.A2
 encL = rotaryio.IncrementalEncoder(PIN_ENC_L0, PIN_ENC_L1)
 encR = rotaryio.IncrementalEncoder(PIN_ENC_R0, PIN_ENC_R1)
 
-sonarL = adafruit_hcsr04.HCSR04(trigger_pin=PIN_SON_A0, echo_pin=PIN_SON_A1) # sonar dist in cm
-sonarF = adafruit_hcsr04.HCSR04(trigger_pin=PIN_SON_A0, echo_pin=PIN_SON_A1)
-sonarR = adafruit_hcsr04.HCSR04(trigger_pin=PIN_SON_A0, echo_pin=PIN_SON_A1)
+sonarL = adafruit_hcsr04.HCSR04(trigger_pin=PIN_SON_L0, echo_pin=PIN_SON_L1) # sonar dist in cm
+sonarF = adafruit_hcsr04.HCSR04(trigger_pin=PIN_SON_F0, echo_pin=PIN_SON_F1)
+sonarR = adafruit_hcsr04.HCSR04(trigger_pin=PIN_SON_F0, echo_pin=PIN_SON_F1)
 
 
 i2c = busio.I2C(SCL, SDA)
