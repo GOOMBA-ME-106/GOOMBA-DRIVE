@@ -64,7 +64,7 @@ decoder = adafruit_irremote.GenericDecode()
 # output pins
 PIN_MOTL0 = board.A4 #these share channels with on board rot enc so don't twist it while in use
 PIN_MOTL1 = board.A5
-PIN_MOTR0 = board.SCK
+PIN_MOTR0 = board.SCK # the pins for this motor need to change as we use SCK and MI and MO pin used with rasp pi
 PIN_MOTR1 = board.MI
 #PIN_IRLED = board.A3? may want to have it controlled for the freq or duty because of how the pulse library works?
 # dylan says he has another board so we can use that instead for this
