@@ -5,13 +5,14 @@
 #   v0.8 25-Mar-2021 Drafting of functions for sensors and classes for state machine
 
 import board
-from board import SCL, SDA
-import pwmio, rotaryio, pulseio  # pulseio for IR sensor
+from board import SCL, SDA, SCK, MO, MI
+import pwmio, rotaryio, digitalio, pulseio  # pulseio for IR sensor
 # import analogio -- not sure if we need this yet
 import time, busio
 import adafruit_lis3mdl # magnetometer
 import adafruit_irremote
 import adafruit_hcsr04  # sonar sensor
+from adafruit_bus_device.spi_device import SPIDevice
 from adafruit_motor import motor  # need to look into what i can do with this
 
 from numpy import cos
@@ -34,8 +35,9 @@ from adafruit_bluefruit_connect.button_packet import ButtonPacket
  Sck, MO, MI pins can be used for general purpose IO (GPIO), but we use SPI
  so IR stuff goes to other board
 '''
-#PIN_IR = board.A2 move these pins to the thunderboard
+#PIN_IR = board.A2 move these to the thunderboard
 #PIN_IRLED = board.A3
+# also need to move a sonar or encoder over
 
 # sensor input pins
 #PIN_SON_L0 = board.D11
@@ -77,6 +79,24 @@ motR0 = pwmio.PWMOut(PIN_MOTR0)
 motR1 = pwmio.PWMOut(PIN_MOTR1)
 motR = motor.DCMotor(motR0, motR1)
 motR.FAST_DECAY = 1
+
+# SPI stuff
+'''
+ any free digital I/O pin to rpi CS/chip select
+ most chips expect CS line to be held high when they aren’t in use 
+ then pulled low when the processor is talking to them,
+ but check your device’s datasheet
+'''
+PIN_CS = board.D5 # placeholder pin
+cs = digitalio.DigitalInOut(PIN_CS)
+cs.direction = digitalio.Direction.OUTPUT
+spi = busio.SPI(SCK, MISO=MI, MOSI=MO)
+device = SPIDevice(spi, cs, baudrate=5000000, polarity=0, phase=0) # need to look up for our rpi
+'''
+ the SPI device class only supports devices with a chip select 
+ and whose chip select is asserted with a low logic signal.
+ otherwise we have to lock/unlock spi and enable/disable cs manually
+''' 
 
 DUTY_MAX = 2**16-1
 blink_time = 0.1
@@ -157,6 +177,7 @@ def new_vect(ang, dist): # takes radians and cm
     vect[1] = float(dist) * sin(ang)
     return vect
 
+# IR stuff
 '''
  puslein object can be read as a list. after pulsein[0] which is the time spent waiting for first detected high
  in ms, it then gives how long it detected that pulse at pulsein[1]. this gives the duration of pulse high for odd
@@ -188,12 +209,25 @@ def vector_store(vec_list, outfile):
     # JSON stuff here?
     json = "jason"
 
+# how to use SPI
+with device:
+    result = bytearray(4) # 4 byte buffer is created to hold the result of the SPI read
+    spi.readinto(result) #  called to read 4 bytes of data from the rpi
+print(result) # need to check rpi’s datasheet to see how to interpret the data
+# can also use the busio.SPI.write() function to send data over the MOSI line in bytes
+# for example
+with device:
+    spi.write(bytes([0x01, 0xFF]))
+'''
+ CS line is asserted for the entire with statement block,
+ so if you need to make two different transactions
+ be sure to put them in their own with statement blocks
+'''
 
 # Main loop
 vector_array = {}
 origins = [] # would this part be easier with object oriented programming?
 i = 0
-
 
 while True:
     if i == 0:
@@ -209,3 +243,4 @@ while True:
     print('Encoders: {0:10.2f}L {1:10.2f}R pulses'.format(encL.position, encR.position))
 
     time.sleep(0.25)
+    
