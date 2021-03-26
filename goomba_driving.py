@@ -106,67 +106,12 @@ DUTY_MAX = 2**16-1
 blink_time = 0.1
 last_time = 0
 
-# States of state machine
-class forward_state(state):
-
-    def on_event(self, event, dist, ang):
-        if event == "FRONT":
-            # some way to output distance of wall here
-            return ["TURN", "LEFT"]  # i want to check for multiple events at once?
-            # or could i just say turn on direction until there is no longer a front event
-            # also want something in here to store distance of object
-
-        elif event == "LEFT":
-            # some way to output distance of wall here
-            stuff = 0
-        elif event == "RIGHT":
-            # some way to output distance of wall here
-            stuff = 0
-        elif event == "CLIFF":
-            stuff = 0
-        else:
-            return self
-
-
-class turn_state(state):
-
-    def on_event(self):
-        again = 1
-        noty = 2
-        stuff_here = 1
-        testing_stuff = again + noty * stuff_here
-
-
-class idling_state(state):
-    def on_event(self):
-        idk = again
-
-
-class state_machine(object):
-    def on_event(self, initial_state):
-        self.state = idling_state()
-
-
 def error(err_string):
     raise Exception(err_string)
 
 
 def motor_level(level, mot):  # input is range of percents, -100 to 100
     mot.throttle = float(level/100)
-
-# not sure about including duration cause i'll need it to keep checking
-def turning(direction):
-    mag = 75
-    direc = str(direction).upper()
-    if direc == "LEFT":
-        motor_level(mag, motL)
-        motor_level(-mag, motR)
-    elif direc == "RIGHT":
-        motor_level(mag, motR)
-        motor_level(-mag, motL)
-    else:
-        print(direction, "is not a valid direction to turn.")
-
 
 def distance(enc_change0, enc_change1):  # is there some way to use magnetometer w/ this?
     enc_change = (enc_change0 + enc_change1)/2
@@ -214,7 +159,7 @@ def fuzzy_pulse_compare(pulse1, pulse2, fuzzyness=0.1):  # interpret matching si
 #fuzzy_pulse_compare(pulse, pulse2)
 
 
-def cliff_dist(ir_stuff):
+def cliff_function(ir_stuff):
     ir_stuff = 0
 
 
@@ -222,7 +167,6 @@ def vector_store(vec_list, outfile):
     # JSON stuff here?
     json = "jason"
 
-print(0)
 # how to use SPI
 with raspi:
     result = bytearray(4)  # 4 byte buffer is created to hold the result of the SPI read
@@ -238,10 +182,6 @@ with raspi:
  be sure to put them in their own with statement blocks
 '''
 
-# Main loop
-vector_array = {}
-origins = [[(0, 0, 0), (0, 0)], [(0, 0, 0), (0, 0)]]  # would this part be easier with object oriented programming?
-i = 0
 # to try multiple I2C devices for sunday
 #while not i2c.try_lock():
     #pass
@@ -254,19 +194,98 @@ except:
 # Unlock I2C now that we're done scanning.
 i2c.unlock()
 # https://e2e.ti.com/blogs_/b/analogwire/posts/how-to-simplify-i2c-tree-when-connecting-multiple-slaves-to-an-i2c-master
-event = "IDLE"
-while True:
-    if i == 0:
-        origins[i][1] = (0, 0)  # to store vector w/ magnetic data
-    if event == "TURN":
+
+
+# States of state machine
+class state_machine():
+    go = None
+
+    def __init__(self, initial_state, motL, motR, magneto):
+        self.state = str(initial_state).upper()
+        self.mot1 = motL
+        self.mot2 = motR
+        self.magnet = magneto
+
+    def forward(self, speed):
+        motor_level(speed, self.mot1)
+        motor_level(speed, self.mot2)
+    
+    def idle(self, ignite):
+        motor_level(0, self.mot1)
+        motor_level(0, self.mot2)
+        if ignite = True:
+            self.state = "LOCATE"
+    
+    def locate(self, encL, encR, start):  # for initialization
+        thing = [[(0, 0, 0), (0, 0)], [(0, 0, 0), (0, 0)]]
+        thing[0][0] = self.magnet.magnetic
+        thing[0][1] = (encL.position, encR.position)
+        self.state = "FORWARD"
+        return  thing
+    
+    def locate(self, encL, encR):  # for use between turning and forward
+        thing = [[(0, 0, 0), (0, 0)], [(0, 0, 0), (0, 0)]]
+        thing[0][0] = self.magnet.magnetic
+        thing[0][1] = (encL.position, encR.position)
+        self.state = "TURN"
+        return  thing
+
+    def turn(self, direction, mag=20):
+    direc = str(direction).upper()
+    if direc == "LEFT":
+        motor_level(mag, motL)
+        motor_level(-mag, motR)
+    elif direc == "RIGHT":
+        motor_level(mag, motR)
+        motor_level(-mag, motL)
+    else:
+        print(direction, "is not a valid direction to turn.")
+
+
+
+
+# Main loop
+vector_array = {}
+origins = [[(0, 0, 0), (0, 0)], [(0, 0, 0), (0, 0)]]  # would this part be easier with object oriented programming?
+i = 0
+start = "IDLE"
+s_threshhold = 30  # in cm
+goomba = state_machine(start, motL, motR, lis3)
+while True:  # actual main loop
+    #start_button = some input here
+    if goomba.state == "IDLE":
+        goomba.idle(start_button) # button input could be used from the bluefruit
+    elif goomba.state == "LOCATE":
+        origins[i] = goomba.locate(encL, encR, TRUE)
         i += 1
-        origins[i][0] = lis3.magnetic
-    mag_x, mag_y, mag_z = origins[i][0]
-    dists = [sonarL.distance, sonarF.distance, sonarR.distance]
-    distL, distF, distR = dists
+    elif goomba.state == "FORWARD":
+        goomba.forward(60)
+        if (sonarL.distance <= s_threshhold) and (sonarF.distance <= s_threshhold):
+            origins[i] = goomba.locate(encL, encR)
+            i += 1 # i want the origin to only grab one list of values when it starts turning
+            # then one when it stops
+            goomba.go = "RIGHT"
+        elif (sonarR.distance <= s_threshhold) and (sonarF.distance <= s_threshhold):
+            origins[i] = goomba.locate(encL, encR)
+            i += 1 
+            goomba.go = "LEFT"
+        elif cliff_function() = True:
+            origins[i] = goomba.locate(encL, encR)
+            i += 1 
+            goomba.go = "RIGHT"
+        elif start_button = True:
+            goomba.state = "IDLE"
+        
+    elif goomba.state == "TURN":
+        goomba.turn(goomba.go)
+        if (sonarF.distance >= s_threshhold) and (cliff_function() = False):
+            origins[i] = goomba.locate(encL, encR)
+            i += 1
+            goomba.state = "FORWARD"
+        elif start_button = True:
+            goomba.state = "IDLE"
 
-    print("Sonar distances: {:.2f}L {:.2f}F {:.2f}R (cm)".format(*dists))
-    print('Magnetometer: {0:10.2f}X {1:10.2f}Y {2:10.2f}Z uT'.format(mag_x, mag_y, mag_z))
-    print('Encoders: {0:10.2f}L {1:10.2f}R pulses'.format(encL.position, encR.position))
-
-    time.sleep(0.25)
+# this state machine can take 5 events:
+# true or false input for cliffs
+# less than threshold value on any of the left front or right sonar
+# and taking some sort of reset button
