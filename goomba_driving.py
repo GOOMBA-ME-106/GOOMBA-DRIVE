@@ -184,7 +184,7 @@ with raspi:
 
 # to try multiple I2C devices for sunday
 #while not i2c.try_lock():
-    #pass
+#    pass
  
 try:
     print("I2C addresses found:", [hex(device_address) for device_address in i2c.scan()])
@@ -213,7 +213,7 @@ class state_machine():
     def idle(self, ignite):
         motor_level(0, self.mot1)
         motor_level(0, self.mot2)
-        if ignite = True:
+        if ignite is True:
             self.state = "LOCATE"
     
     def locate(self, encL, encR, start):  # for initialization
@@ -221,27 +221,25 @@ class state_machine():
         thing[0][0] = self.magnet.magnetic
         thing[0][1] = (encL.position, encR.position)
         self.state = "FORWARD"
-        return  thing
+        return thing
     
     def locate(self, encL, encR):  # for use between turning and forward
         thing = [[(0, 0, 0), (0, 0)], [(0, 0, 0), (0, 0)]]
         thing[0][0] = self.magnet.magnetic
         thing[0][1] = (encL.position, encR.position)
         self.state = "TURN"
-        return  thing
+        return thing
 
     def turn(self, direction, mag=20):
-    direc = str(direction).upper()
-    if direc == "LEFT":
-        motor_level(mag, motL)
-        motor_level(-mag, motR)
-    elif direc == "RIGHT":
-        motor_level(mag, motR)
-        motor_level(-mag, motL)
-    else:
-        print(direction, "is not a valid direction to turn.")
-
-
+        direc = str(direction).upper()
+        if direc == "LEFT":
+            motor_level(mag, motL)
+            motor_level(-mag, motR)
+        elif direc == "RIGHT":
+            motor_level(mag, motR)
+            motor_level(-mag, motL)
+        else:
+            print(direction, "is not a valid direction to turn.")
 
 
 # Main loop
@@ -269,20 +267,20 @@ while True:  # actual main loop
             origins[i] = goomba.locate(encL, encR)
             i += 1 
             goomba.go = "LEFT"
-        elif cliff_function() = True:
+        elif cliff_function() is True:
             origins[i] = goomba.locate(encL, encR)
             i += 1 
             goomba.go = "RIGHT"
-        elif start_button = True:
+        elif start_button is True:
             goomba.state = "IDLE"
         
     elif goomba.state == "TURN":
         goomba.turn(goomba.go)
-        if (sonarF.distance >= s_threshhold) and (cliff_function() = False):
+        if (sonarF.distance >= s_threshhold) and (cliff_function() is False):
             origins[i] = goomba.locate(encL, encR)
             i += 1
             goomba.state = "FORWARD"
-        elif start_button = True:
+        elif start_button is True:
             goomba.state = "IDLE"
 
 # this state machine can take 5 events:
