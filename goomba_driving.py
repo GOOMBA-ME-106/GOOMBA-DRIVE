@@ -3,6 +3,7 @@
 #
 # Written by Ryan Sands (sandsryanj@gmail.com)
 #   v0.8 25-Mar-2021 Drafting of functions for sensors and classes for state machine
+#   v0.9 26-Mar-2021 Initial version of state machine to handle 5 events. Needs to finish sensor handling
 
 import board
 from board import SCL, SDA, SCK, MOSI, MISO
