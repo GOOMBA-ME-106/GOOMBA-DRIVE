@@ -31,24 +31,17 @@ def motor_test(mot1, mot2, drive_time):
     motor_level(0, mot2)
     time.sleep(drive)
 
-i = 0
-event = 0
+
 step = 5
 speed1 = 0
 speed2 = 0
 while True:  # the testing loop
     ble.start_advertising(advertisement)
     while not ble.connected:
-        if i == 0:
-            origins[i][1] = (0, 0)
-            origins[i][0] = lis3.magnetic  # to store vector w/ magnetic data
-        if event == "TURN":
-            i += 1
-            origins[i][0] = lis3.magnetic
         dists = [sonarL.distance, sonarF.distance, sonarR.distance]
 
         print("Sonar distances: {:.2f}L {:.2f}F {:.2f}R (cm)".format(*dists))
-        print('Magnetometer: {0:10.2f}X {1:10.2f}Y {2:10.2f}Z uT'.format(lis3.magnetic))
+        print('Magnetometer: {0:10.2f}X {1:10.2f}Y {2:10.2f}Z uT'.format(*lis3.magnetic))
         print('Encoders: {0:10.2f}L {1:10.2f}R pulses'.format(encL.position, encR.position))
 
         time.sleep(0.5)
@@ -99,4 +92,14 @@ while True:  # the testing loop
                     elif packet.button == B4:
                         # The 4 button was pressed.
                         print("4 button pressed! It was not very effective.")
-        motor_level()
+        
+        motor_level(speed1, motL)
+        motor_level(speed1, motR)
+
+        dists = [sonarL.distance, sonarF.distance, sonarR.distance]
+
+        print("Sonar distances: {:.2f}L {:.2f}F {:.2f}R (cm)".format(*dists))
+        print('Magnetometer: {0:10.2f}X {1:10.2f}Y {2:10.2f}Z uT'.format(*lis3.magnetic))
+        print('Encoders: {0:10.2f}L {1:10.2f}R pulses'.format(encL.position, encR.position))
+
+        time.sleep(0.1)
