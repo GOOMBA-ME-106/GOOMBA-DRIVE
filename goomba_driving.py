@@ -24,14 +24,13 @@ from math import cos
 from math import sin
 
 from goomba_state import state
-''' probably unnecessary bluetooth stuff
-from adafruit_ble import BLERadio
+
+from adafruit_ble import BLERadio  # for testing motors remotely
 from adafruit_ble.advertising.standard import ProvideServicesAdvertisement
 from adafruit_ble.services.nordic import UARTService
 
 from adafruit_bluefruit_connect.packet import Packet
 from adafruit_bluefruit_connect.button_packet import ButtonPacket
-'''
 
 '''
  we have 7 digital pins, 6 analog pins explicitly - D13, D12, D11, D10, D9, D6, D5, D2
@@ -104,8 +103,22 @@ raspi = SPIDevice(spi, cs, baudrate=5000000, polarity=0, phase=0)  # need to loo
 '''
 
 DUTY_MAX = 2**16-1
-blink_time = 0.1
-last_time = 0
+
+ble = BLERadio()
+uart = UARTService()
+advertisement = ProvideServicesAdvertisement(uart)
+
+B1 = ButtonPacket.BUTTON_1
+B2 = ButtonPacket.BUTTON_2
+B3 = ButtonPacket.BUTTON_3
+B4 = ButtonPacket.BUTTON_4
+DOWN = ButtonPacket.DOWN
+UP = ButtonPacket.UP
+LEFT = ButtonPacket.LEFT
+RIGHT = ButtonPacket.RIGHT
+
+
+>>>>>>> main
 
 def error(err_string):
     raise Exception(err_string)
