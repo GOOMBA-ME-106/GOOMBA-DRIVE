@@ -5,7 +5,7 @@
 #   v0.8 25-Mar-2021 Drafting of functions for sensors and classes for state machine
 
 import board
-from board import SCL, SDA, SCK, MO, MI
+from board import SCL, SDA, SCK, MOSI, MISO
 import pwmio
 import rotaryio
 import digitalio  # for SPI CS
@@ -19,8 +19,8 @@ import adafruit_hcsr04  # sonar sensor
 from adafruit_bus_device.spi_device import SPIDevice
 from adafruit_motor import motor  # need to look into what i can do with this
 
-from numpy import cos
-from numpy import sin
+from math import cos
+from math import sin
 
 from goomba_state import state
 ''' probably unnecessary bluetooth stuff
@@ -39,9 +39,9 @@ from adafruit_bluefruit_connect.button_packet import ButtonPacket
  Sck, MO, MI pins can be used for general purpose IO (GPIO), but we use SPI
  so IR stuff goes to other board
 '''
-#PIN_IR = board.A2 move these to the thunderboard
+PIN_IR = board.TX  # move these to the thunderboard?
 #PIN_IRLED = board.A3
-# also need to move a sonar or encoder over
+# also need to move a sonar or encoder over if no I2C
 
 # sensor input pins
 PIN_SON_L0 = board.D11
@@ -66,8 +66,8 @@ sonarR = adafruit_hcsr04.HCSR04(trigger_pin=PIN_SON_R0, echo_pin=PIN_SON_R1)
 i2c = busio.I2C(SCL, SDA)
 lis3 = adafruit_lis3mdl.LIS3MDL(i2c)
 
-#pulsein = pulseio.PulseIn(PIN_IR, maxlen=150, idle_state=True)
-#decoder = adafruit_irremote.GenericDecode()
+pulsein = pulseio.PulseIn(PIN_IR, maxlen=150, idle_state=True)
+decoder = adafruit_irremote.GenericDecode()
 
 # output pins
 PIN_MOTL0 = board.A4  # we need tot take out the IW before we use this
@@ -91,10 +91,10 @@ motR.FAST_DECAY = 1
  then pulled low when the processor is talking to them,
  but check your device’s datasheet
 '''
-PIN_CS = board.D5 # placeholder pin
+PIN_CS = board.RX  # placeholder pin
 cs = digitalio.DigitalInOut(PIN_CS)
 cs.direction = digitalio.Direction.OUTPUT
-spi = busio.SPI(SCK, MISO=MI, MOSI=MO)
+spi = busio.SPI(SCK, MISO, MOSI)
 raspi = SPIDevice(spi, cs, baudrate=5000000, polarity=0, phase=0)  # need to look up for our rpi
 '''
  the SPI device class only supports devices with a chip select
@@ -110,25 +110,27 @@ last_time = 0
 class forward_state(state):
 
     def on_event(self, event, dist, ang):
-        if event == "front":
+        if event == "FRONT":
             # some way to output distance of wall here
-            return ["turn", "left"]  # i want to check for multiple events at once?
+            return ["TURN", "LEFT"]  # i want to check for multiple events at once?
             # or could i just say turn on direction until there is no longer a front event
             # also want something in here to store distance of object
 
-        elif event == "left":
+        elif event == "LEFT":
             # some way to output distance of wall here
             stuff = 0
-        elif event == "right":
+        elif event == "RIGHT":
             # some way to output distance of wall here
             stuff = 0
-        elif event == "cliff":
+        elif event == "CLIFF":
             stuff = 0
+        else:
+            return self
 
 
 class turn_state(state):
 
-    def __init__(self):
+    def on_event(self):
         again = 1
         noty = 2
         stuff_here = 1
@@ -136,12 +138,12 @@ class turn_state(state):
 
 
 class idling_state(state):
-    def __init__(self):
+    def on_event(self):
         idk = again
 
 
 class state_machine(object):
-    def __init__(self, initial_state):
+    def on_event(self, initial_state):
         self.state = idling_state()
 
 
@@ -198,8 +200,9 @@ def new_vect(ang, dist):  # takes radians and cm
  (or if one had previously happened and not been processed it will grab it instead
 '''
 
-pulse = decoder.read_pulses(pulsein)  # look at the decoder code and note behavior
-pulse2 = decoder.read_pulses(pulsein)
+# commented out because it holds up program waiting for signal w/ no IR
+#pulse = decoder.read_pulses(pulsein)  # look at the decoder code and note behavior
+#pulse2 = decoder.read_pulses(pulsein)
 def fuzzy_pulse_compare(pulse1, pulse2, fuzzyness=0.1):  # interpret matching signals from IR sensor
     if len(pulse1) != len(pulse2):
         return False
@@ -219,6 +222,7 @@ def vector_store(vec_list, outfile):
     # JSON stuff here?
     json = "jason"
 
+print(0)
 # how to use SPI
 with raspi:
     result = bytearray(4)  # 4 byte buffer is created to hold the result of the SPI read
@@ -236,24 +240,25 @@ with raspi:
 
 # Main loop
 vector_array = {}
-origins = []  # would this part be easier with object oriented programming?
+origins = [[(0, 0, 0), (0, 0)], [(0, 0, 0), (0, 0)]]  # would this part be easier with object oriented programming?
 i = 0
 # to try multiple I2C devices for sunday
-while not i2c.try_lock():
-    pass
+#while not i2c.try_lock():
+    #pass
  
 try:
-    print("I2C addresses found:", [hex(device_address)
-        for device_address in i2c.scan()])
+    print("I2C addresses found:", [hex(device_address) for device_address in i2c.scan()])
+except: 
+    print("No I2C addresses found")
 
 # Unlock I2C now that we're done scanning.
 i2c.unlock()
 # https://e2e.ti.com/blogs_/b/analogwire/posts/how-to-simplify-i2c-tree-when-connecting-multiple-slaves-to-an-i2c-master
-
+event = "IDLE"
 while True:
     if i == 0:
         origins[i][1] = (0, 0)  # to store vector w/ magnetic data
-    if event == "turning":
+    if event == "TURN":
         i += 1
         origins[i][0] = lis3.magnetic
     mag_x, mag_y, mag_z = origins[i][0]
