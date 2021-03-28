@@ -200,6 +200,8 @@ def send_bytes(origin_data):  # TODO send bytes representing data through SPI
 #values = [[1234,1237],("21.967", "-62.146", "-4.516")]
 #send_bytes(origin_data)
 
+# may want to consider UART approach
+
 # to try multiple I2C devices for sunday
 #while not i2c.try_lock():
 #    pass
