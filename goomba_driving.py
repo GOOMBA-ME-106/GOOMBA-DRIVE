@@ -11,9 +11,8 @@ import pwmio
 import rotaryio
 import digitalio  # for SPI CS
 import pulseio  # pulseio for IR sensor
-# import analogio  # not sure if we need this yet
 import time
-import busio
+import busio  # for i2c and SPI
 import adafruit_lis3mdl  # magnetometer
 import adafruit_irremote
 import adafruit_hcsr04  # sonar sensor
@@ -23,8 +22,6 @@ from adafruit_motor import motor  # need to look into what i can do with this
 from math import cos
 from math import sin
 
-from goomba_state import state
-
 from adafruit_ble import BLERadio  # for testing motors remotely
 from adafruit_ble.advertising.standard import ProvideServicesAdvertisement
 from adafruit_ble.services.nordic import UARTService
@@ -32,10 +29,12 @@ from adafruit_ble.services.nordic import UARTService
 from adafruit_bluefruit_connect.packet import Packet
 from adafruit_bluefruit_connect.button_packet import ButtonPacket
 
+import struct
+
 '''
  we have 7 digital pins, 6 analog pins explicitly - D13, D12, D11, D10, D9, D6, D5, D2
  Analog available A0, A1, A2, A3, A4, A5 just take out IW
- gives tentative total of 13 pins at our disposal, no I2C pins
+ gives tentative total of 13 pins at our disposal, no I2C pins?
  Sck, MO, MI pins can be used for general purpose IO (GPIO), but we use SPI
  so IR stuff goes to other board
 '''
@@ -84,24 +83,6 @@ motR1 = pwmio.PWMOut(PIN_MOTR1)
 motR = motor.DCMotor(motR0, motR1)
 motR.FAST_DECAY = 1
 
-# SPI stuff
-'''
- any free digital I/O pin to rpi CS/chip select
- most chips expect CS line to be held high when they aren’t in use
- then pulled low when the processor is talking to them,
- but check your device’s datasheet
-'''
-PIN_CS = board.RX  # placeholder pin
-cs = digitalio.DigitalInOut(PIN_CS)
-cs.direction = digitalio.Direction.OUTPUT
-spi = busio.SPI(SCK, MISO, MOSI)
-raspi = SPIDevice(spi, cs, baudrate=5000000, polarity=0, phase=0)  # need to look up for our rpi
-'''
- the SPI device class only supports devices with a chip select
- and whose chip select is asserted with a low logic signal.
- otherwise we have to lock/unlock spi and enable/disable cs manually
-'''
-
 DUTY_MAX = 2**16-1
 
 ble = BLERadio()
@@ -116,9 +97,6 @@ DOWN = ButtonPacket.DOWN
 UP = ButtonPacket.UP
 LEFT = ButtonPacket.LEFT
 RIGHT = ButtonPacket.RIGHT
-
-
->>>>>>> main
 
 def error(err_string):
     raise Exception(err_string)
@@ -146,7 +124,7 @@ def new_vect(ang, dist):  # takes radians and cm
     vect[1] = float(dist) * sin(ang)
     return vect
 
-# IR stuff
+# TODO IR stuff
 '''
  puslein object can be read as a list. after pulsein[0] which is the time spent waiting for first detected high
  in ms, it then gives how long it detected that pulse at pulsein[1]. this gives the duration of pulse high for odd
@@ -173,13 +151,33 @@ def fuzzy_pulse_compare(pulse1, pulse2, fuzzyness=0.1):  # interpret matching si
 #fuzzy_pulse_compare(pulse, pulse2)
 
 
-def cliff_function(ir_stuff):
+def cliff_function(ir_stuff):  # TODO get some true or false input when it detects a cliff
     ir_stuff = 0
 
 
-def vector_store(vec_list, outfile):
-    # JSON stuff here?
-    json = "jason"
+# SPI stuff
+'''
+ any free digital I/O pin to rpi CS/chip select
+ most chips expect CS line to be held high when they aren’t in use
+ then pulled low when the processor is talking to them,
+ but check your device’s datasheet
+'''
+PIN_CS = board.RX  # TODO replace placeholder pin
+cs = digitalio.DigitalInOut(PIN_CS)
+cs.direction = digitalio.Direction.OUTPUT
+spi = busio.SPI(SCK, MISO, MOSI)
+raspi = SPIDevice(spi, cs, baudrate=2*(10**6), polarity=0, phase=0)  # TODO look up for our rpi
+'''
+ the SPI device class only supports devices with a chip select
+ and whose chip select is asserted with a low logic signal.
+ otherwise we have to lock/unlock spi and enable/disable cs manually
+ for the pi:
+The CDIV (Clock Divider) field of the CLK register sets the SPI clock speed:
+SCLK = Core Clock / CDIV
+If CDIV is set to 0, the divisor is 65536. divisor must be a multiple of 2, odd numbers rounded down
+ Note that not all possible clock rates are usable because of analog electrical issues 
+ (rise times, drive strengths, etc.)
+'''
 
 # how to use SPI
 with raspi:
@@ -195,6 +193,12 @@ with raspi:
  so if you need to make two different transactions
  be sure to put them in their own with statement blocks
 '''
+def send_bytes(origin_data):  # TODO send bytes representing data through SPI 
+    for count0, d_list in enumerate(values):
+        for  value in d_list:
+            spi.write(bytes(struct.pack("d", float(value))))  # use struct.unpack to get float back
+#values = [[1234,1237],("21.967", "-62.146", "-4.516")]
+#send_bytes(origin_data)
 
 # to try multiple I2C devices for sunday
 #while not i2c.try_lock():
@@ -209,10 +213,12 @@ except:
 i2c.unlock()
 # https://e2e.ti.com/blogs_/b/analogwire/posts/how-to-simplify-i2c-tree-when-connecting-multiple-slaves-to-an-i2c-master
 
+#sonarR = adafruit_hcsr04.HCSR04(i2c)
 
 # States of state machine
 class state_machine():
     go = None
+    debug = True
 
     def __init__(self, initial_state, motL, motR, magneto):
         self.state = str(initial_state).upper()
@@ -231,17 +237,23 @@ class state_machine():
             self.state = "LOCATE"
     
     def locate(self, encL, encR, start):  # for initialization
-        thing = [[(0, 0, 0), (0, 0)], [(0, 0, 0), (0, 0)]]
+        thing = [[(0, 0, 0), (0, 0)]]
         thing[0][0] = self.magnet.magnetic
         thing[0][1] = (encL.position, encR.position)
         self.state = "FORWARD"
+        if debug is True:
+            print(thing)
+            time.sleep(0.05)
         return thing
     
     def locate(self, encL, encR):  # for use between turning and forward
-        thing = [[(0, 0, 0), (0, 0)], [(0, 0, 0), (0, 0)]]
+        thing = [[(0, 0, 0), (0, 0)]]
         thing[0][0] = self.magnet.magnetic
         thing[0][1] = (encL.position, encR.position)
         self.state = "TURN"
+        if debug is True:
+            print(thing)
+            time.sleep(0.05)
         return thing
 
     def turn(self, direction, mag=20):
@@ -258,7 +270,7 @@ class state_machine():
 
 # Main loop
 vector_array = {}
-origins = [[(0, 0, 0), (0, 0)], [(0, 0, 0), (0, 0)]]  # would this part be easier with object oriented programming?
+origins = [[(0, 0, 0), (0, 0)]]  # initializing the list 
 i = 0
 start = "IDLE"
 s_threshhold = 30  # in cm
