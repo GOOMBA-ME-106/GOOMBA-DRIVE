@@ -59,8 +59,8 @@ encL = rotaryio.IncrementalEncoder(PIN_ENC_L0, PIN_ENC_L1)
 encR = rotaryio.IncrementalEncoder(PIN_ENC_R0, PIN_ENC_R1)
 
 sonarL = adafruit_hcsr04.HCSR04(trigger_pin=PIN_SON_L0, echo_pin=PIN_SON_L1)  # sonar dist in cm
-sonarF = adafruit_hcsr04.HCSR04(trigger_pin=PIN_SON_F0, echo_pin=PIN_SON_F1)
-sonarR = adafruit_hcsr04.HCSR04(trigger_pin=PIN_SON_R0, echo_pin=PIN_SON_R1)
+#sonarF = adafruit_hcsr04.HCSR04(trigger_pin=PIN_SON_F0, echo_pin=PIN_SON_F1)
+#sonarR = adafruit_hcsr04.HCSR04(trigger_pin=PIN_SON_R0, echo_pin=PIN_SON_R1)
 
 i2c = busio.I2C(SCL, SDA)
 lis3 = adafruit_lis3mdl.LIS3MDL(i2c)
@@ -94,7 +94,7 @@ PIN_CS = board.RX  # placeholder pin
 cs = digitalio.DigitalInOut(PIN_CS)
 cs.direction = digitalio.Direction.OUTPUT
 spi = busio.SPI(SCK, MISO, MOSI)
-raspi = SPIDevice(spi, cs, baudrate=5000000, polarity=0, phase=0)  # need to look up for our rpi
+raspi = SPIDevice(spi, cs, baudrate=2*(10**6), polarity=0, phase=0)  # need to look up for our rpi
 '''
  the SPI device class only supports devices with a chip select
  and whose chip select is asserted with a low logic signal.
@@ -198,17 +198,17 @@ def vector_store(vec_list, outfile):
     # JSON stuff here?
     json = "jason"
 
-def motor_test(mot1, mot2, drive_time):
-    drive = drive_time/3
-    motor_level(60, mot1)
-    motor_level(60, mot2)
+def motor_test(mot1, mot2, drive_time, mag=60):
+    drive = drive_time/2
+    motor_level(mag, mot1)
+    motor_level(mag, mot2)
     time.sleep(drive)
-    motor_level(-60, mot1)
-    motor_level(-60, mot2)
+    motor_level(-mag, mot1)
+    motor_level(-mag, mot2)
     time.sleep(drive)
     motor_level(0, mot1)
     motor_level(0, mot2)
-    time.sleep(drive)
+    time.sleep(0.1)
 
 # how to use SPI
 with raspi:
@@ -247,15 +247,14 @@ speed2 = 0
 while True:  # the testing loop
     ble.start_advertising(advertisement)
     while not ble.connected:
-        dists = [sonarL.distance, sonarF.distance, sonarR.distance]
-
-        print("Sonar distances: {:.2f}L {:.2f}F {:.2f}R (cm)".format(*dists))
+        #dists = [sonarL.distance, sonarF.distance, sonarR.distance]
+        #print("Sonar distances: {:.2f}L {:.2f}F {:.2f}R (cm)".format(*dists))
         print('Magnetometer: {0:10.2f}X {1:10.2f}Y {2:10.2f}Z uT'.format(*lis3.magnetic))
         print('Encoders: {0:10.2f}L {1:10.2f}R pulses'.format(encL.position, encR.position))
 
         time.sleep(0.5)
         mot_test0 = input("Test motors? /n Y or N ")
-        mot_test1 = mot_test0.upper
+        mot_test1 = mot_test0.upper()
         if mot_test1 == "Y":
             duration = float(input("How long? "))
             motor_test(motL, motR, duration)
@@ -305,10 +304,10 @@ while True:  # the testing loop
         motor_level(speed1, motL)
         motor_level(speed1, motR)
 
-        dists = [sonarL.distance, sonarF.distance, sonarR.distance]
+        #dists = [sonarL.distance, sonarF.distance, sonarR.distance]
 
-        print("Sonar distances: {:.2f}L {:.2f}F {:.2f}R (cm)".format(*dists))
+        #print("Sonar distances: {:.2f}L {:.2f}F {:.2f}R (cm)".format(*dists))
         print('Magnetometer: {0:10.2f}X {1:10.2f}Y {2:10.2f}Z uT'.format(*lis3.magnetic))
-        print('Encoders: {0:10.2f}L {1:10.2f}R pulses'.format(encL.position, encR.position))
+        print('Encoders: {0:10.2f} L {1:10.2f} R pulses'.format(encL.position, encR.position))
 
         time.sleep(0.1)
