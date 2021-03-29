@@ -22,8 +22,6 @@ from adafruit_motor import motor  # need to look into what i can do with this
 from math import cos
 from math import sin
 
-from goomba_state import state
-
 from adafruit_ble import BLERadio  # for testing motors remotely
 from adafruit_ble.advertising.standard import ProvideServicesAdvertisement
 from adafruit_ble.services.nordic import UARTService
@@ -58,12 +56,14 @@ PIN_ENC_R1 = board.D13
 encL = rotaryio.IncrementalEncoder(PIN_ENC_L0, PIN_ENC_L1)
 encR = rotaryio.IncrementalEncoder(PIN_ENC_R0, PIN_ENC_R1)
 
+
 sonarL = adafruit_hcsr04.HCSR04(trigger_pin=PIN_SON_L0, echo_pin=PIN_SON_L1)  # sonar dist in cm
 #sonarF = adafruit_hcsr04.HCSR04(trigger_pin=PIN_SON_F0, echo_pin=PIN_SON_F1)
 #sonarR = adafruit_hcsr04.HCSR04(trigger_pin=PIN_SON_R0, echo_pin=PIN_SON_R1)
 
 i2c = busio.I2C(SCL, SDA)
 lis3 = adafruit_lis3mdl.LIS3MDL(i2c)
+#sonarL = adafruit_hcsr04.HCSR04(i2c)  # sonar dist in cm
 
 pulsein = pulseio.PulseIn(PIN_IR, maxlen=150, idle_state=True)
 decoder = adafruit_irremote.GenericDecode()
@@ -193,6 +193,12 @@ def fuzzy_pulse_compare(pulse1, pulse2, fuzzyness=0.1):  # interpret matching si
 def cliff_dist(ir_stuff):
     ir_stuff = 0
 
+def send_bytes(data_list):
+    for count0, value0 in enumerate(values):
+        for  value1 in value0:
+            spi.write(bytes(struct.pack("d", float(value1))))
+            
+#struct.unpack("d", a) to get the values back
 
 def vector_store(vec_list, outfile):
     # JSON stuff here?
@@ -230,10 +236,10 @@ with raspi:
 # to try multiple I2C devices for sunday
 #while not i2c.try_lock():
     #pass
- 
+
 try:
     print("I2C addresses found:", [hex(device_address) for device_address in i2c.scan()])
-except: 
+except:
     print("No I2C addresses found")
 
 # Unlock I2C now that we're done scanning.
@@ -248,7 +254,9 @@ while True:  # the testing loop
     ble.start_advertising(advertisement)
     while not ble.connected:
         #dists = [sonarL.distance, sonarF.distance, sonarR.distance]
+        dists = [sonarL.distance]
         #print("Sonar distances: {:.2f}L {:.2f}F {:.2f}R (cm)".format(*dists))
+        print(dists)
         print('Magnetometer: {0:10.2f}X {1:10.2f}Y {2:10.2f}Z uT'.format(*lis3.magnetic))
         print('Encoders: {0:10.2f}L {1:10.2f}R pulses'.format(encL.position, encR.position))
 
@@ -270,7 +278,9 @@ while True:  # the testing loop
                 if packet.pressed:
                     if packet.button == B1:
                         # The 1 button was pressed.
-                        print("1 button pressed! It was not very effective.")
+                        print("1 button pressed! It was super effective!")
+                        speed1 = 90
+                        speed2 = 90
                     elif packet.button == UP:
                         # The UP button was pressed.
                         print("UP button pressed! The left motor's speed sharply rose!")
@@ -293,16 +303,20 @@ while True:  # the testing loop
                             speed2 += step
                     elif packet.button == B2:
                         # The 2 button was pressed.
-                        print("2 button pressed! It was not very effective.")
+                        print("2 button pressed! It was super effective but in reverse.")
+                        speed1 = -90
+                        speed2 = -90
                     elif packet.button == B3:
                         # The 3 button was pressed.
                         print("3 button pressed! It was not very effective.")
                     elif packet.button == B4:
                         # The 4 button was pressed.
-                        print("4 button pressed! It was not very effective.")
-        
+                        print("4 button pressed! It was a one hit KO!")
+                        speed1 = 0
+                        speed2 = 0
+
         motor_level(speed1, motL)
-        motor_level(speed1, motR)
+        motor_level(speed2, motR)
 
         #dists = [sonarL.distance, sonarF.distance, sonarR.distance]
 
