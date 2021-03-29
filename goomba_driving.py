@@ -10,14 +10,13 @@ import pwmio
 import rotaryio
 import digitalio  # for SPI CS
 import pulseio  # pulseio for IR sensor
-# import analogio  # not sure if we need this yet
 import time
 import busio
 import adafruit_lis3mdl  # magnetometer
 import adafruit_irremote
 import adafruit_hcsr04  # sonar sensor
 from adafruit_bus_device.spi_device import SPIDevice
-from adafruit_motor import motor  # need to look into what i can do with this
+from adafruit_motor import motor
 
 from math import cos
 from math import sin
@@ -36,8 +35,9 @@ from adafruit_bluefruit_connect.button_packet import ButtonPacket
  Sck, MO, MI pins can be used for general purpose IO (GPIO), but we use SPI
  so IR stuff goes to other board
 '''
-PIN_IR = board.TX  # move these to the thunderboard?
-#PIN_IRLED = board.A3
+# if we get I2C to work, move a sensor and IR sensor to free 2 gpio for CS for SPI and IRLED out
+#PIN_IR = board.TX  # placeholder
+#PIN_IRLED = board.RX # placeholder
 # also need to move a sonar or encoder over if no I2C
 
 # sensor input pins
@@ -63,13 +63,13 @@ sonarL = adafruit_hcsr04.HCSR04(trigger_pin=PIN_SON_L0, echo_pin=PIN_SON_L1)  # 
 
 i2c = busio.I2C(SCL, SDA)
 lis3 = adafruit_lis3mdl.LIS3MDL(i2c)
-#sonarL = adafruit_hcsr04.HCSR04(i2c)  # sonar dist in cm
+#sonarL = adafruit_hcsr04.HCSR04(i2c)  # gives error pluggin straight into SCL SDA
 
 pulsein = pulseio.PulseIn(PIN_IR, maxlen=150, idle_state=True)
 decoder = adafruit_irremote.GenericDecode()
 
 # output pins
-PIN_MOTL0 = board.A4  # we need tot take out the IW before we use this
+PIN_MOTL0 = board.A4
 PIN_MOTL1 = board.A5
 PIN_MOTR0 = board.A2  # these pins replacing IR stuff
 PIN_MOTR1 = board.A3
@@ -117,12 +117,6 @@ LEFT = ButtonPacket.LEFT
 RIGHT = ButtonPacket.RIGHT
 
 
-# States of state machine
-class state_machine(object):
-    def on_event(self, initial_state):
-        self.state = idling_state()
-
-
 def error(err_string):
     raise Exception(err_string)
 
@@ -130,9 +124,8 @@ def error(err_string):
 def motor_level(level, mot):  # input is range of percents, -100 to 100
     mot.throttle = float(level/100)
 
-# not sure about including duration cause i'll need it to keep checking
-def turning(direction):
-    mag = 75
+
+def turning(direction, mag=75):
     direc = str(direction).upper()
     if direc == "LEFT":
         motor_level(mag, motL)
@@ -163,35 +156,6 @@ def new_vect(ang, dist):  # takes radians and cm
     vect[1] = float(dist) * sin(ang)
     return vect
 
-# IR stuff
-'''
- puslein object can be read as a list. after pulsein[0] which is the time spent waiting for first detected high
- in ms, it then gives how long it detected that pulse at pulsein[1]. this gives the duration of pulse high for odd
- numbers and the time waiting for even numbers of pulsein[x]
- if i set the IR LED to a 50% duty cycle with a like 1 kHz frequency, i can say that if the difference in is
- pulsein[i]-pulsein[i-1] >= 100, there is a drop?
-
- the decoder will remove long starting pulse width
- read_pulses function will wait for a remote control press to be detected
- (or if one had previously happened and not been processed it will grab it instead
-'''
-
-# commented out because it holds up program waiting for signal w/ no IR
-#pulse = decoder.read_pulses(pulsein)  # look at the decoder code and note behavior
-#pulse2 = decoder.read_pulses(pulsein)
-def fuzzy_pulse_compare(pulse1, pulse2, fuzzyness=0.1):  # interpret matching signals from IR sensor
-    if len(pulse1) != len(pulse2):
-        return False
-    for i in range(len(pulse1)):
-        threshold = int(pulse1[i] * fuzzyness)
-        if abs(pulse1[i] - pulse2[i]) > threshold:
-            return False
-    return True
-#fuzzy_pulse_compare(pulse, pulse2)
-
-
-def cliff_dist(ir_stuff):
-    ir_stuff = 0
 
 def send_bytes(data_list):
     for count0, value0 in enumerate(values):
@@ -200,9 +164,6 @@ def send_bytes(data_list):
             
 #struct.unpack("d", a) to get the values back
 
-def vector_store(vec_list, outfile):
-    # JSON stuff here?
-    json = "jason"
 
 def motor_test(mot1, mot2, drive_time, mag=60):
     drive = drive_time/2
@@ -231,22 +192,8 @@ with raspi:
  be sure to put them in their own with statement blocks
 '''
 
+
 # Main loop
-
-# to try multiple I2C devices for sunday
-#while not i2c.try_lock():
-    #pass
-
-try:
-    print("I2C addresses found:", [hex(device_address) for device_address in i2c.scan()])
-except:
-    print("No I2C addresses found")
-
-# Unlock I2C now that we're done scanning.
-i2c.unlock()
-# https://e2e.ti.com/blogs_/b/analogwire/posts/how-to-simplify-i2c-tree-when-connecting-multiple-slaves-to-an-i2c-master
-
-
 step = 5
 speed1 = 0
 speed2 = 0
