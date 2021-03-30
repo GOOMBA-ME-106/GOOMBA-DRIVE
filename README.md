@@ -15,7 +15,6 @@ The needed libraries from there are:
 - adafruit_irremote
 - adafruit_hcsr04
 - adafruit_motor
-- [adafruit_bus_device](https://github.com/adafruit/Adafruit_CircuitPython_BusDevice "adafruit_bus_device")
 
 and probably  
   
