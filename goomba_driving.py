@@ -5,7 +5,7 @@
 #   v0.8 25-Mar-2021 Drafting of functions for sensors and classes for state machine
 
 import board
-from board import SCL, SDA, SCK, MOSI, MISO
+from board import SCL, SDA, SCK, MOSI, MISO, RX, TX
 import pwmio
 import rotaryio
 import digitalio  # for SPI CS
@@ -15,7 +15,6 @@ import busio
 import adafruit_lis3mdl  # magnetometer
 import adafruit_irremote
 import adafruit_hcsr04  # sonar sensor
-from adafruit_bus_device.spi_device import SPIDevice
 from adafruit_motor import motor
 
 from math import cos
@@ -36,8 +35,8 @@ from adafruit_bluefruit_connect.button_packet import ButtonPacket
  so IR stuff goes to other board
 '''
 # if we get I2C to work, move a sensor and IR sensor to free 2 gpio for CS for SPI and IRLED out
-#PIN_IR = board.TX  # placeholder
-#PIN_IRLED = board.RX # placeholder
+PIN_IR = board.MO  # placeholder
+PIN_IRLED = board.MI # placeholder
 # also need to move a sonar or encoder over if no I2C
 
 # sensor input pins
@@ -63,7 +62,7 @@ sonarL = adafruit_hcsr04.HCSR04(trigger_pin=PIN_SON_L0, echo_pin=PIN_SON_L1)  # 
 
 i2c = busio.I2C(SCL, SDA)
 lis3 = adafruit_lis3mdl.LIS3MDL(i2c)
-#sonarL = adafruit_hcsr04.HCSR04(i2c)  # gives error pluggin straight into SCL SDA
+#sonarL = adafruit_hcsr04.HCSR04(i2c)  # gives error plugging straight into SCL SDA
 
 pulsein = pulseio.PulseIn(PIN_IR, maxlen=150, idle_state=True)
 decoder = adafruit_irremote.GenericDecode()
@@ -82,24 +81,6 @@ motR0 = pwmio.PWMOut(PIN_MOTR0)
 motR1 = pwmio.PWMOut(PIN_MOTR1)
 motR = motor.DCMotor(motR0, motR1)
 motR.FAST_DECAY = 1
-
-# SPI stuff
-'''
- any free digital I/O pin to rpi CS/chip select
- most chips expect CS line to be held high when they aren’t in use
- then pulled low when the processor is talking to them,
- but check your device’s datasheet
-'''
-PIN_CS = board.RX  # placeholder pin
-cs = digitalio.DigitalInOut(PIN_CS)
-cs.direction = digitalio.Direction.OUTPUT
-spi = busio.SPI(SCK, MISO, MOSI)
-raspi = SPIDevice(spi, cs, baudrate=2*(10**6), polarity=0, phase=0)  # need to look up for our rpi
-'''
- the SPI device class only supports devices with a chip select
- and whose chip select is asserted with a low logic signal.
- otherwise we have to lock/unlock spi and enable/disable cs manually
-'''
 
 DUTY_MAX = 2**16-1
 
@@ -177,20 +158,23 @@ def motor_test(mot1, mot2, drive_time, mag=60):
     motor_level(0, mot2)
     time.sleep(0.1)
 
-# how to use SPI
-with raspi:
-    result = bytearray(4)  # 4 byte buffer is created to hold the result of the SPI read
-    spi.readinto(result)  #  called to read 4 bytes of data from the rpi
-print(result)  # need to check rpi’s datasheet to see how to interpret the data
-# can also use the busio.SPI.write() function to send data over the MOSI line in bytes
-# for example
-with raspi:
-    spi.write(bytes([0x01, 0xFF]))
-'''
- CS line is asserted for the entire with statement block,
- so if you need to make two different transactions
- be sure to put them in their own with statement blocks
-'''
+
+# UART stuff for RPI
+uart_rpi = UART(TX, RX, baudrate=9600, timeout=0.5)
+
+def send_bytes(origin_data):  # TODO send bytes representing data through SPI 
+    for count0, d_list in enumerate(origin_data):
+        for value in d_list:
+            uart_rpi.write(bytes(struct.pack("d", float(value))))  # use struct.unpack to get float back
+#values = [[1234, 1237], ("21.967", "-62.146", "-4.516")]
+#send_bytes(values)
+
+def read_uart(numbytes):
+    data = uart_rpi.read(numbytes)
+    if data is not None:
+        data_string = struct.unpack("d", data)
+        print(data_string, end="")
+# may want to use SCK pin as a chipselect pin for communication
 
 
 # Main loop
@@ -198,23 +182,33 @@ step = 5
 speed1 = 0
 speed2 = 0
 while True:  # the testing loop
+    #dists = [sonarL.distance, sonarF.distance, sonarR.distance]
+    dists = [sonarL.distance]
+    encs = [encL.position, encR.position]
+    
     ble.start_advertising(advertisement)
     while not ble.connected:
-        #dists = [sonarL.distance, sonarF.distance, sonarR.distance]
-        dists = [sonarL.distance]
+        
         #print("Sonar distances: {:.2f}L {:.2f}F {:.2f}R (cm)".format(*dists))
         print(dists)
         print('Magnetometer: {0:10.2f}X {1:10.2f}Y {2:10.2f}Z uT'.format(*lis3.magnetic))
-        print('Encoders: {0:10.2f}L {1:10.2f}R pulses'.format(encL.position, encR.position))
+        print('Encoders: {0:10.2f}L {1:10.2f}R pulses'.format(encs))
 
         time.sleep(0.5)
         mot_test0 = input("Test motors? /n Y or N ")
         mot_test1 = mot_test0.upper()
+        uart_test0 = input("Test UART? /n Y or N ")
+        uart_test1 = uart_test0.upper()
         if mot_test1 == "Y":
             duration = float(input("How long? "))
             motor_test(motL, motR, duration)
-        elif mot_test1 == "END":
+        if uart_test1 == "Y":
+            origins = [dists, encs, lis3.magnetic]
+            send_bytes(origins)
+            read_uart(8)
+        elif (mot_test1 == "END") or (uart_test1 == "END"):
             break
+        
 
     # Now we're connected
 
@@ -256,6 +250,9 @@ while True:  # the testing loop
                     elif packet.button == B3:
                         # The 3 button was pressed.
                         print("3 button pressed! It was not very effective.")
+                        origins = [dists, encs, lis3.magnetic]
+                        send_bytes(origins)
+                        read_uart(8)
                     elif packet.button == B4:
                         # The 4 button was pressed.
                         print("4 button pressed! It was a one hit KO!")
@@ -265,10 +262,8 @@ while True:  # the testing loop
         motor_level(speed1, motL)
         motor_level(speed2, motR)
 
-        #dists = [sonarL.distance, sonarF.distance, sonarR.distance]
-
         #print("Sonar distances: {:.2f}L {:.2f}F {:.2f}R (cm)".format(*dists))
         print('Magnetometer: {0:10.2f}X {1:10.2f}Y {2:10.2f}Z uT'.format(*lis3.magnetic))
-        print('Encoders: {0:10.2f} L {1:10.2f} R pulses'.format(encL.position, encR.position))
+        print('Encoders: {0:10.2f} L {1:10.2f} R pulses'.format(encs))
 
         time.sleep(0.1)
