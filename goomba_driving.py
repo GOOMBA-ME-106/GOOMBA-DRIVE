@@ -61,7 +61,7 @@ sonarL = adafruit_hcsr04.HCSR04(trigger_pin=PIN_SON_L0, echo_pin=PIN_SON_L1)  # 
 
 i2c = board.I2C()
 lis3 = adafruit_lis3mdl.LIS3MDL(i2c)
-lsm6 = adafruit_lsm6ds.lsm6ds33(i2c)
+lsm6 = adafruit_lsm6ds.lsm6ds33.LSM6DS33(i2c)
 
 pulsein = pulseio.PulseIn(PIN_IR, maxlen=150, idle_state=True)
 decoder = adafruit_irremote.GenericDecode()
