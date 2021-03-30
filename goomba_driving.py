@@ -8,13 +8,14 @@ import board
 from board import SCL, SDA, SCK, MOSI, MISO, RX, TX
 import pwmio
 import rotaryio
-import digitalio  # for SPI CS
 import pulseio  # pulseio for IR sensor
 import time
-import busio
+import struct
+from busio import UART
 import adafruit_lis3mdl  # magnetometer
 import adafruit_irremote
 import adafruit_hcsr04  # sonar sensor
+import adafruit_lsm6ds.lsm6ds33  # acceleromter & gyro
 from adafruit_motor import motor
 
 from math import cos
@@ -27,7 +28,6 @@ from adafruit_ble.services.nordic import UARTService
 from adafruit_bluefruit_connect.packet import Packet
 from adafruit_bluefruit_connect.button_packet import ButtonPacket
 
-import digitalio  # for pull up
 '''
  we have 7 digital pins, 6 analog pins explicitly - D13, D12, D11, D10, D9, D6, D5, D2
  Analog available A0, A1, A2, A3, A4, A5 just take out IW
@@ -35,10 +35,6 @@ import digitalio  # for pull up
  Sck, MO, MI pins can be used for general purpose IO (GPIO), but we use SPI
  so IR stuff goes to other board
 '''
-# if we get I2C to work, move a sensor and IR sensor to free 2 gpio for CS for SPI and IRLED out
-PIN_IR = board.MOSI  # placeholder
-PIN_IRLED = board.MISO # placeholder
-# also need to move a sonar or encoder over if no I2C
 
 # sensor input pins
 PIN_SON_L0 = board.D11
@@ -53,6 +49,8 @@ PIN_ENC_L1 = board.A1
 PIN_ENC_R0 = board.D12
 PIN_ENC_R1 = board.D13
 
+PIN_IR = MOSI  # placeholder pin?
+
 encL = rotaryio.IncrementalEncoder(PIN_ENC_L0, PIN_ENC_L1)
 encR = rotaryio.IncrementalEncoder(PIN_ENC_R0, PIN_ENC_R1)
 
@@ -63,11 +61,13 @@ sonarL = adafruit_hcsr04.HCSR04(trigger_pin=PIN_SON_L0, echo_pin=PIN_SON_L1)  # 
 
 i2c = board.I2C()
 lis3 = adafruit_lis3mdl.LIS3MDL(i2c)
+lsm6 = adafruit_lsm6ds.lsm6ds33(i2c)
 
 pulsein = pulseio.PulseIn(PIN_IR, maxlen=150, idle_state=True)
 decoder = adafruit_irremote.GenericDecode()
 
 # output pins
+PIN_IRLED = MISO  # placeholder pin?
 PIN_MOTL0 = board.A4
 PIN_MOTL1 = board.A5
 PIN_MOTR0 = board.A2  # these pins replacing IR stuff
@@ -152,25 +152,24 @@ def motor_test(mot1, mot2, drive_time, mag=60):
 
 
 # UART stuff for RPI
-rpi_write = busio.UART(TX, RX, baudrate=9600, timeout=0.5)
-rpi_read = busio.UART(SCL, SDA, baudrate=9600)
+rpi_write = UART(TX, RX, baudrate=9600, timeout=0.5)
+#rpi_read = UART(SCL, SDA, baudrate=9600)  # need pull up resistor for this
+
 
 def send_bytes(origin_data):  # TODO send bytes representing data through SPI 
     for count0, d_list in enumerate(origin_data):
         for value in d_list:
-            uart_rpi.write(bytes(struct.pack("d", float(value))))  # use struct.unpack to get float back
-#values = [[1234, 1237], ("21.967", "-62.146", "-4.516")]
-#send_bytes(values)
+            rpi_write.write(bytes(struct.pack("d", float(value))))  # use struct.unpack to get float back
+
 
 def read_uart(numbytes):
-    data = uart_rpi.read(numbytes)
+    data = rpi_write.read(numbytes)  # change this if we get a second set of RX TX pins
     if data is not None:
         try:
             data_string = struct.unpack("d", data)
             print(data_string, end="")
         except:
             print("No data found.")
-# may want to use SCK pin as a chipselect pin for communication
 
 
 # Main loop
@@ -189,6 +188,8 @@ while True:  # the testing loop
         print(dists)
         print('Magnetometer: {0:10.2f}X {1:10.2f}Y {2:10.2f}Z uT'.format(*lis3.magnetic))
         print('Encoders: {0:10.2f}L {1:10.2f}R pulses'.format(*encs))
+        print("Acceleration: {:.2f} {:.2f} {:.2f} m/s^2".format(*lsm6.acceleration))
+        print("Gyro: {:.2f} {:.2f} {:.2f} dps".format(*lsm6.gyro))
 
         time.sleep(0.5)
         mot_test0 = input("Test motors? /n Y or N ")
@@ -199,15 +200,13 @@ while True:  # the testing loop
             duration = float(input("How long? "))
             motor_test(motL, motR, duration)
         if uart_test1 == "Y":
-            origins = [dists, encs, lis3.magnetic]
+            origins = [dists, encs, lis3.magnetic, lsm6.acceleration]
             send_bytes(origins)
             read_uart(8)
         elif (mot_test1 == "END") or (uart_test1 == "END"):
             break
         
-
     # Now we're connected
-
     while ble.connected:
         if uart.in_waiting:
             packet = Packet.from_stream(uart)
@@ -260,6 +259,8 @@ while True:  # the testing loop
 
         #print("Sonar distances: {:.2f}L {:.2f}F {:.2f}R (cm)".format(*dists))
         print('Magnetometer: {0:10.2f} X {1:10.2f} Y {2:10.2f} Z uT'.format(*lis3.magnetic))
-        print('Encoders: {0:10.2f} L {1:10.2f} R pulses'.format(encs))
+        print('Encoders: {0:10.2f} L {1:10.2f} R pulses'.format(*encs))
+        print("Acceleration: {:.2f} {:.2f} {:.2f} m/s^2".format(*lsm6.acceleration))
+        print("Gyro: {:.2f} {:.2f} {:.2f} dps".format(*lsm6.gyro))
 
         time.sleep(0.1)
