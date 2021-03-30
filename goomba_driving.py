@@ -138,14 +138,6 @@ def new_vect(ang, dist):  # takes radians and cm
     return vect
 
 
-def send_bytes(data_list):
-    for count0, value0 in enumerate(values):
-        for  value1 in value0:
-            spi.write(bytes(struct.pack("d", float(value1))))
-            
-#struct.unpack("d", a) to get the values back
-
-
 def motor_test(mot1, mot2, drive_time, mag=60):
     drive = drive_time/2
     motor_level(mag, mot1)
@@ -172,8 +164,11 @@ def send_bytes(origin_data):  # TODO send bytes representing data through SPI
 def read_uart(numbytes):
     data = uart_rpi.read(numbytes)
     if data is not None:
-        data_string = struct.unpack("d", data)
-        print(data_string, end="")
+        try:
+            data_string = struct.unpack("d", data)
+            print(data_string, end="")
+        except:
+            print("No data found.")
 # may want to use SCK pin as a chipselect pin for communication
 
 
