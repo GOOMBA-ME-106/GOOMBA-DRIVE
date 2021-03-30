@@ -167,7 +167,7 @@ def read_uart(numbytes):
     if data is not None:
         try:
             data_string = struct.unpack("d", data)
-            print(data_string, end="")
+            print(data_string)
         except:
             print("No data found.")
 
@@ -177,13 +177,11 @@ step = 5
 speed1 = 0
 speed2 = 0
 while True:  # the testing loop
-    #dists = [sonarL.distance, sonarF.distance, sonarR.distance]
-    dists = [sonarL.distance]
-    encs = [encL.position, encR.position]
-    
     ble.start_advertising(advertisement)
     while not ble.connected:
-        
+        #dists = [sonarL.distance, sonarF.distance, sonarR.distance]
+        dists = [sonarL.distance]
+        encs = [encL.position, encR.position]
         #print("Sonar distances: {:.2f}L {:.2f}F {:.2f}R (cm)".format(*dists))
         print(dists)
         print('Magnetometer: {0:10.2f}X {1:10.2f}Y {2:10.2f}Z uT'.format(*lis3.magnetic))
@@ -194,18 +192,22 @@ while True:  # the testing loop
         time.sleep(0.5)
         mot_test0 = input("Test motors? /n Y or N ")
         mot_test1 = mot_test0.upper()
+        
+        if (mot_test1 == "END"):
+            break
+
         uart_test0 = input("Test UART? /n Y or N ")
         uart_test1 = uart_test0.upper()
-        if mot_test1 == "Y":
+        if (uart_test1 == "END"):
+            break
+        elif mot_test1 == "Y":
             duration = float(input("How long? "))
             motor_test(motL, motR, duration)
-        if uart_test1 == "Y":
-            origins = [dists, encs, lis3.magnetic, lsm6.acceleration]
+        elif uart_test1 == "Y":
+            origins = [dists, encs, lis3.magnetic, lsm6.acceleration, lsm6.gyro]
             send_bytes(origins)
             read_uart(8)
-        elif (mot_test1 == "END") or (uart_test1 == "END"):
-            break
-        
+
     # Now we're connected
     while ble.connected:
         if uart.in_waiting:
@@ -239,7 +241,7 @@ while True:  # the testing loop
                             speed2 += step
                     elif packet.button == B2:
                         # The 2 button was pressed.
-                        print("2 button pressed! It was super effective but in reverse.")
+                        print("2 button pressed! It was super effective but in reverse?")
                         speed1 = -90
                         speed2 = -90
                     elif packet.button == B3:
@@ -254,6 +256,10 @@ while True:  # the testing loop
                         speed1 = 0
                         speed2 = 0
 
+        #dists = [sonarL.distance, sonarF.distance, sonarR.distance]
+        dists = [sonarL.distance]
+        encs = [encL.position, encR.position]
+        
         motor_level(speed1, motL)
         motor_level(speed2, motR)
 
