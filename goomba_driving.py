@@ -1,9 +1,9 @@
 # goomba_driving.py - ME 106 Project Code
-#   For use with the EduShields TriplerBaseboard
 #
-# Written by Ryan Sands (sandsryanj@gmail.com)
-#   v0.8 25-Mar-2021 Drafting of functions for sensors and classes for state machine
-#   v0.9 26-Mar-2021 Initial version of state machine to handle 5 events. Needs to finish sensor handling
+# Written by  Justin Ramos, Dylan Robinson, Ryan Sands (sandsryanj@gmail.com)
+#   v0.80 25-Mar-2021 Drafting of functions for sensors and classes for state machine
+#   v0.90 26-Mar-2021 Initial version of state machine to handle 5 events.
+#   v0.91 28-Mar-2021
 
 import board
 from board import SCL, SDA, SCK, MOSI, MISO, RX, TX
@@ -11,13 +11,13 @@ import pwmio
 import rotaryio
 import pulseio  # pulseio for IR sensor
 import time
-import busio  # for i2c and SPI
+import busio  # for i2c and UART
 from busio import UART
 import adafruit_lis3mdl  # magnetometer
 import adafruit_irremote
 import adafruit_hcsr04  # sonar sensor
 
-from adafruit_motor import motor  # need to look into what i can do with this
+from adafruit_motor import motor  
 
 from math import cos
 from math import sin
@@ -155,9 +155,7 @@ uart_rpi = UART(TX, RX, baudrate=9600, timeout=0.5)
 def send_bytes(origin_data):  # TODO send bytes representing data through SPI 
     for count0, d_list in enumerate(origin_data):
         for value in d_list:
-            uart_rpi.write(bytes(struct.pack("d", float(value))))  # use struct.unpack to get float back
-#values = [[1234, 1237], ("21.967", "-62.146", "-4.516")]
-#send_bytes(values)
+            uart_rpi.write(bytes(struct.pack("d", float(value))))  
 
 def read_uart(numbytes):
     data = uart_rpi.read(numbytes)
@@ -263,3 +261,5 @@ while True:  # actual main loop
 # true or false input for cliffs
 # less than threshold value on any of the left front or right sonar
 # and taking some sort of reset button
+# how will we decide when to read and when to write between FnRF and RPI?
+# does reading by UART block program?
