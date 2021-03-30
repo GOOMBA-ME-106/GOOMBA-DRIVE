@@ -6,28 +6,21 @@
 #   v0.9 26-Mar-2021 Initial version of state machine to handle 5 events. Needs to finish sensor handling
 
 import board
-from board import SCL, SDA, SCK, MOSI, MISO
+from board import SCL, SDA, SCK, MOSI, MISO, RX, TX
 import pwmio
 import rotaryio
-import digitalio  # for SPI CS
 import pulseio  # pulseio for IR sensor
 import time
 import busio  # for i2c and SPI
+from busio import UART
 import adafruit_lis3mdl  # magnetometer
 import adafruit_irremote
 import adafruit_hcsr04  # sonar sensor
-from adafruit_bus_device.spi_device import SPIDevice
+
 from adafruit_motor import motor  # need to look into what i can do with this
 
 from math import cos
 from math import sin
-
-from adafruit_ble import BLERadio  # for testing motors remotely
-from adafruit_ble.advertising.standard import ProvideServicesAdvertisement
-from adafruit_ble.services.nordic import UARTService
-
-from adafruit_bluefruit_connect.packet import Packet
-from adafruit_bluefruit_connect.button_packet import ButtonPacket
 
 import struct
 
@@ -35,11 +28,11 @@ import struct
  we have 7 digital pins, 6 analog pins explicitly - D13, D12, D11, D10, D9, D6, D5, D2
  Analog available A0, A1, A2, A3, A4, A5 just take out IW
  gives tentative total of 13 pins at our disposal, no I2C pins?
- Sck, MO, MI pins can be used for general purpose IO (GPIO), but we use SPI
+ Sck, MO, MI pins can be used for general purpose IO (GPIO) or SPI
  so IR stuff goes to other board
 '''
-PIN_IR = board.TX  # move these to the thunderboard?
-#PIN_IRLED = board.A3
+PIN_IR = MOSI  # we have space if we don't use SPI
+PIN_IRLED = MISO
 # also need to move a sonar or encoder over if no I2C
 
 # sensor input pins
@@ -69,7 +62,7 @@ pulsein = pulseio.PulseIn(PIN_IR, maxlen=150, idle_state=True)
 decoder = adafruit_irremote.GenericDecode()
 
 # output pins
-PIN_MOTL0 = board.A4  # we need tot take out the IW before we use this
+PIN_MOTL0 = board.A4  # we need to take out the IW before we use this
 PIN_MOTL1 = board.A5
 PIN_MOTR0 = board.A2  # these pins replacing IR stuff
 PIN_MOTR1 = board.A3
@@ -84,7 +77,7 @@ motR = motor.DCMotor(motR0, motR1)
 motR.FAST_DECAY = 1
 
 DUTY_MAX = 2**16-1
-
+''' bluetooth stuff
 ble = BLERadio()
 uart = UARTService()
 advertisement = ProvideServicesAdvertisement(uart)
@@ -97,13 +90,14 @@ DOWN = ButtonPacket.DOWN
 UP = ButtonPacket.UP
 LEFT = ButtonPacket.LEFT
 RIGHT = ButtonPacket.RIGHT
-
+'''
 def error(err_string):
     raise Exception(err_string)
 
 
 def motor_level(level, mot):  # input is range of percents, -100 to 100
     mot.throttle = float(level/100)
+
 
 def distance(enc_change0, enc_change1):  # is there some way to use magnetometer w/ this?
     enc_change = (enc_change0 + enc_change1)/2
@@ -155,67 +149,22 @@ def cliff_function(ir_stuff):  # TODO get some true or false input when it detec
     ir_stuff = 0
 
 
-# SPI stuff
-'''
- any free digital I/O pin to rpi CS/chip select
- most chips expect CS line to be held high when they aren’t in use
- then pulled low when the processor is talking to them,
- but check your device’s datasheet
-'''
-PIN_CS = board.RX  # TODO replace placeholder pin
-cs = digitalio.DigitalInOut(PIN_CS)
-cs.direction = digitalio.Direction.OUTPUT
-spi = busio.SPI(SCK, MISO, MOSI)
-raspi = SPIDevice(spi, cs, baudrate=2*(10**6), polarity=0, phase=0)  # TODO look up for our rpi
-'''
- the SPI device class only supports devices with a chip select
- and whose chip select is asserted with a low logic signal.
- otherwise we have to lock/unlock spi and enable/disable cs manually
- for the pi:
-The CDIV (Clock Divider) field of the CLK register sets the SPI clock speed:
-SCLK = Core Clock / CDIV
-If CDIV is set to 0, the divisor is 65536. divisor must be a multiple of 2, odd numbers rounded down
- Note that not all possible clock rates are usable because of analog electrical issues 
- (rise times, drive strengths, etc.)
-'''
+# UART stuff for RPI
+uart_rpi = UART(TX, RX, baudrate=9600, timeout=0.5)
 
-# how to use SPI
-with raspi:
-    result = bytearray(4)  # 4 byte buffer is created to hold the result of the SPI read
-    spi.readinto(result)  #  called to read 4 bytes of data from the rpi
-print(result)  # need to check rpi’s datasheet to see how to interpret the data
-# can also use the busio.SPI.write() function to send data over the MOSI line in bytes
-# for example
-with raspi:
-    spi.write(bytes([0x01, 0xFF]))
-'''
- CS line is asserted for the entire with statement block,
- so if you need to make two different transactions
- be sure to put them in their own with statement blocks
-'''
 def send_bytes(origin_data):  # TODO send bytes representing data through SPI 
-    for count0, d_list in enumerate(values):
-        for  value in d_list:
-            spi.write(bytes(struct.pack("d", float(value))))  # use struct.unpack to get float back
-#values = [[1234,1237],("21.967", "-62.146", "-4.516")]
-#send_bytes(origin_data)
+    for count0, d_list in enumerate(origin_data):
+        for value in d_list:
+            uart_rpi.write(bytes(struct.pack("d", float(value))))  # use struct.unpack to get float back
+#values = [[1234, 1237], ("21.967", "-62.146", "-4.516")]
+#send_bytes(values)
 
-# may want to consider UART approach
-
-# to try multiple I2C devices for sunday
-#while not i2c.try_lock():
-#    pass
- 
-try:
-    print("I2C addresses found:", [hex(device_address) for device_address in i2c.scan()])
-except: 
-    print("No I2C addresses found")
-
-# Unlock I2C now that we're done scanning.
-i2c.unlock()
-# https://e2e.ti.com/blogs_/b/analogwire/posts/how-to-simplify-i2c-tree-when-connecting-multiple-slaves-to-an-i2c-master
-
-#sonarR = adafruit_hcsr04.HCSR04(i2c)
+def read_uart(numbytes):
+    data = uart_rpi.read(numbytes)
+    if data is not None:
+        data_string = struct.unpack("d", data)
+        print(data_string, end="")
+# may want to use SCK pin as a chipselect pin for communication
 
 # States of state machine
 class state_machine():
@@ -288,8 +237,7 @@ while True:  # actual main loop
         goomba.forward(60)
         if (sonarL.distance <= s_threshhold) and (sonarF.distance <= s_threshhold):
             origins[i] = goomba.locate(encL, encR)
-            i += 1 # i want the origin to only grab one list of values when it starts turning
-            # then one when it stops
+            i += 1
             goomba.go = "RIGHT"
         elif (sonarR.distance <= s_threshhold) and (sonarF.distance <= s_threshhold):
             origins[i] = goomba.locate(encL, encR)
