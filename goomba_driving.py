@@ -27,6 +27,7 @@ from adafruit_ble.services.nordic import UARTService
 from adafruit_bluefruit_connect.packet import Packet
 from adafruit_bluefruit_connect.button_packet import ButtonPacket
 
+import digitalio  # for pull up
 '''
  we have 7 digital pins, 6 analog pins explicitly - D13, D12, D11, D10, D9, D6, D5, D2
  Analog available A0, A1, A2, A3, A4, A5 just take out IW
@@ -35,8 +36,8 @@ from adafruit_bluefruit_connect.button_packet import ButtonPacket
  so IR stuff goes to other board
 '''
 # if we get I2C to work, move a sensor and IR sensor to free 2 gpio for CS for SPI and IRLED out
-PIN_IR = board.MO  # placeholder
-PIN_IRLED = board.MI # placeholder
+PIN_IR = board.MOSI  # placeholder
+PIN_IRLED = board.MISO # placeholder
 # also need to move a sonar or encoder over if no I2C
 
 # sensor input pins
@@ -60,9 +61,8 @@ sonarL = adafruit_hcsr04.HCSR04(trigger_pin=PIN_SON_L0, echo_pin=PIN_SON_L1)  # 
 #sonarF = adafruit_hcsr04.HCSR04(trigger_pin=PIN_SON_F0, echo_pin=PIN_SON_F1)
 #sonarR = adafruit_hcsr04.HCSR04(trigger_pin=PIN_SON_R0, echo_pin=PIN_SON_R1)
 
-i2c = busio.I2C(SCL, SDA)
+i2c = board.I2C()
 lis3 = adafruit_lis3mdl.LIS3MDL(i2c)
-#sonarL = adafruit_hcsr04.HCSR04(i2c)  # gives error plugging straight into SCL SDA
 
 pulsein = pulseio.PulseIn(PIN_IR, maxlen=150, idle_state=True)
 decoder = adafruit_irremote.GenericDecode()
@@ -152,7 +152,8 @@ def motor_test(mot1, mot2, drive_time, mag=60):
 
 
 # UART stuff for RPI
-uart_rpi = UART(TX, RX, baudrate=9600, timeout=0.5)
+rpi_write = busio.UART(TX, RX, baudrate=9600, timeout=0.5)
+rpi_read = busio.UART(SCL, SDA, baudrate=9600)
 
 def send_bytes(origin_data):  # TODO send bytes representing data through SPI 
     for count0, d_list in enumerate(origin_data):
@@ -187,7 +188,7 @@ while True:  # the testing loop
         #print("Sonar distances: {:.2f}L {:.2f}F {:.2f}R (cm)".format(*dists))
         print(dists)
         print('Magnetometer: {0:10.2f}X {1:10.2f}Y {2:10.2f}Z uT'.format(*lis3.magnetic))
-        print('Encoders: {0:10.2f}L {1:10.2f}R pulses'.format(encs))
+        print('Encoders: {0:10.2f}L {1:10.2f}R pulses'.format(*encs))
 
         time.sleep(0.5)
         mot_test0 = input("Test motors? /n Y or N ")
@@ -258,7 +259,7 @@ while True:  # the testing loop
         motor_level(speed2, motR)
 
         #print("Sonar distances: {:.2f}L {:.2f}F {:.2f}R (cm)".format(*dists))
-        print('Magnetometer: {0:10.2f}X {1:10.2f}Y {2:10.2f}Z uT'.format(*lis3.magnetic))
+        print('Magnetometer: {0:10.2f} X {1:10.2f} Y {2:10.2f} Z uT'.format(*lis3.magnetic))
         print('Encoders: {0:10.2f} L {1:10.2f} R pulses'.format(encs))
 
         time.sleep(0.1)
