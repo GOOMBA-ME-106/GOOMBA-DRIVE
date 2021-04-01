@@ -15,7 +15,7 @@ from busio import UART
 import adafruit_lis3mdl  # magnetometer
 import adafruit_irremote
 import adafruit_hcsr04  # sonar sensor
-import adafruit_lsm6ds.lsm6ds33  # acceleromter & gyro
+import adafruit_lsm6ds.lsm6ds33  # acceleromter
 from adafruit_motor import motor
 
 from math import cos
@@ -55,7 +55,7 @@ encL = rotaryio.IncrementalEncoder(PIN_ENC_L0, PIN_ENC_L1)
 encR = rotaryio.IncrementalEncoder(PIN_ENC_R0, PIN_ENC_R1)
 
 
-sonarL = adafruit_hcsr04.HCSR04(trigger_pin=PIN_SON_L0, echo_pin=PIN_SON_L1)  # sonar dist in cm
+#sonarL = adafruit_hcsr04.HCSR04(trigger_pin=PIN_SON_L0, echo_pin=PIN_SON_L1)  # sonar dist in cm
 #sonarF = adafruit_hcsr04.HCSR04(trigger_pin=PIN_SON_F0, echo_pin=PIN_SON_F1)
 #sonarR = adafruit_hcsr04.HCSR04(trigger_pin=PIN_SON_R0, echo_pin=PIN_SON_R1)
 
@@ -152,11 +152,11 @@ def motor_test(mot1, mot2, drive_time, mag=60):
 
 
 # UART stuff for RPI
-rpi_write = UART(TX, RX, baudrate=9600, timeout=0.5)
+rpi_write = UART(TX, RX, baudrate=9600, timeout=1)
 #rpi_read = UART(SCL, SDA, baudrate=9600)  # need pull up resistor for this
 
 
-def send_bytes(origin_data):  # TODO send bytes representing data through SPI 
+def send_bytes(origin_data):  # TODO send bytes representing data through SPI
     for count0, d_list in enumerate(origin_data):
         for value in d_list:
             rpi_write.write(bytes(struct.pack("d", float(value))))  # use struct.unpack to get float back
@@ -176,37 +176,40 @@ def read_uart(numbytes):
 step = 5
 speed1 = 0
 speed2 = 0
+test_q = "Y"
 while True:  # the testing loop
     ble.start_advertising(advertisement)
     while not ble.connected:
         #dists = [sonarL.distance, sonarF.distance, sonarR.distance]
-        dists = [sonarL.distance]
+        #dists = [sonarL.distance]
         encs = [encL.position, encR.position]
         #print("Sonar distances: {:.2f}L {:.2f}F {:.2f}R (cm)".format(*dists))
-        print(dists)
+        #print(dists)
         print('Magnetometer: {0:10.2f}X {1:10.2f}Y {2:10.2f}Z uT'.format(*lis3.magnetic))
         print('Encoders: {0:10.2f}L {1:10.2f}R pulses'.format(*encs))
         print("Acceleration: {:.2f} {:.2f} {:.2f} m/s^2".format(*lsm6.acceleration))
-        print("Gyro: {:.2f} {:.2f} {:.2f} dps".format(*lsm6.gyro))
 
         time.sleep(0.5)
-        mot_test0 = input("Test motors? /n Y or N ")
-        mot_test1 = mot_test0.upper()
-        
-        if (mot_test1 == "END"):
-            break
+        if test_q != "skip":
+            mot_test0 = input("Test motors? /n Y or N ")
+            mot_test1 = mot_test0.upper()
+            test_q = mot_test0
+            if (mot_test1 == "END"):
+                break
 
-        uart_test0 = input("Test UART? /n Y or N ")
-        uart_test1 = uart_test0.upper()
-        if (uart_test1 == "END"):
-            break
-        elif mot_test1 == "Y":
-            duration = float(input("How long? "))
-            motor_test(motL, motR, duration)
-        elif uart_test1 == "Y":
-            origins = [dists, encs, lis3.magnetic, lsm6.acceleration, lsm6.gyro]
-            send_bytes(origins)
-            read_uart(8)
+            uart_test0 = input("Test UART? /n Y or N ")
+            uart_test1 = uart_test0.upper()
+            if test_q != "skip":
+                test_q = uart_test0
+            if (uart_test1 == "END"):
+                break
+            elif mot_test1 == "Y":
+                duration = float(input("How long? "))
+                motor_test(motL, motR, duration)
+            elif uart_test1 == "Y":
+                origins = [dists, encs, lis3.magnetic, lsm6.acceleration]
+                send_bytes(origins)
+                read_uart(8)
 
     # Now we're connected
     while ble.connected:
@@ -246,8 +249,9 @@ while True:  # the testing loop
                         speed2 = -90
                     elif packet.button == B3:
                         # The 3 button was pressed.
-                        print("3 button pressed! It was not very effective.")
-                        origins = [dists, encs, lis3.magnetic]
+                        print("3 button pressed! It used telepathy.")
+                        #origins = [dists, encs, lis3.magnetic, lsm6.acceleration]
+                        origins = [encs, lis3.magnetic, lsm6.acceleration]
                         send_bytes(origins)
                         read_uart(8)
                     elif packet.button == B4:
@@ -255,18 +259,5 @@ while True:  # the testing loop
                         print("4 button pressed! It was a one hit KO!")
                         speed1 = 0
                         speed2 = 0
-
-        #dists = [sonarL.distance, sonarF.distance, sonarR.distance]
-        dists = [sonarL.distance]
-        encs = [encL.position, encR.position]
-        
         motor_level(speed1, motL)
         motor_level(speed2, motR)
-
-        #print("Sonar distances: {:.2f}L {:.2f}F {:.2f}R (cm)".format(*dists))
-        print('Magnetometer: {0:10.2f} X {1:10.2f} Y {2:10.2f} Z uT'.format(*lis3.magnetic))
-        print('Encoders: {0:10.2f} L {1:10.2f} R pulses'.format(*encs))
-        print("Acceleration: {:.2f} {:.2f} {:.2f} m/s^2".format(*lsm6.acceleration))
-        print("Gyro: {:.2f} {:.2f} {:.2f} dps".format(*lsm6.gyro))
-
-        time.sleep(0.1)
