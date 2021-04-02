@@ -6,24 +6,21 @@
 #   v0.9 26-Mar-2021 Initial version of state machine to handle 5 events. Needs to finish sensor handling
 
 import board
-from board import SCL, SDA, SCK, MOSI, MISO
+from board import SCL, SDA, SCK, MOSI, MISO, RX, TX
 import pwmio
 import rotaryio
-import digitalio  # for SPI CS
 import pulseio  # pulseio for IR sensor
-# import analogio  # not sure if we need this yet
 import time
-import busio
+import struct
+from busio import UART
 import adafruit_lis3mdl  # magnetometer
 import adafruit_irremote
 import adafruit_hcsr04  # sonar sensor
-from adafruit_bus_device.spi_device import SPIDevice
-from adafruit_motor import motor  # need to look into what i can do with this
+import adafruit_lsm6ds.lsm6ds33  # acceleromter
+from adafruit_motor import motor
 
 from math import cos
 from math import sin
-
-from goomba_state import state
 
 from adafruit_ble import BLERadio  # for testing motors remotely
 from adafruit_ble.advertising.standard import ProvideServicesAdvertisement
@@ -39,9 +36,6 @@ from adafruit_bluefruit_connect.button_packet import ButtonPacket
  Sck, MO, MI pins can be used for general purpose IO (GPIO), but we use SPI
  so IR stuff goes to other board
 '''
-PIN_IR = board.TX  # move these to the thunderboard?
-#PIN_IRLED = board.A3
-# also need to move a sonar or encoder over if no I2C
 
 # sensor input pins
 PIN_SON_L0 = board.D11
@@ -56,21 +50,26 @@ PIN_ENC_L1 = board.A1
 PIN_ENC_R0 = board.D12
 PIN_ENC_R1 = board.D13
 
+PIN_IR = MOSI  # placeholder pin?
+
 encL = rotaryio.IncrementalEncoder(PIN_ENC_L0, PIN_ENC_L1)
 encR = rotaryio.IncrementalEncoder(PIN_ENC_R0, PIN_ENC_R1)
 
-sonarL = adafruit_hcsr04.HCSR04(trigger_pin=PIN_SON_L0, echo_pin=PIN_SON_L1)  # sonar dist in cm
-sonarF = adafruit_hcsr04.HCSR04(trigger_pin=PIN_SON_F0, echo_pin=PIN_SON_F1)
-sonarR = adafruit_hcsr04.HCSR04(trigger_pin=PIN_SON_R0, echo_pin=PIN_SON_R1)
 
-i2c = busio.I2C(SCL, SDA)
+#sonarL = adafruit_hcsr04.HCSR04(trigger_pin=PIN_SON_L0, echo_pin=PIN_SON_L1)  # sonar dist in cm
+#sonarF = adafruit_hcsr04.HCSR04(trigger_pin=PIN_SON_F0, echo_pin=PIN_SON_F1)
+#sonarR = adafruit_hcsr04.HCSR04(trigger_pin=PIN_SON_R0, echo_pin=PIN_SON_R1)
+
+i2c = board.I2C()
 lis3 = adafruit_lis3mdl.LIS3MDL(i2c)
+lsm6 = adafruit_lsm6ds.lsm6ds33.LSM6DS33(i2c)
 
 pulsein = pulseio.PulseIn(PIN_IR, maxlen=150, idle_state=True)
 decoder = adafruit_irremote.GenericDecode()
 
 # output pins
-PIN_MOTL0 = board.A4  # we need tot take out the IW before we use this
+PIN_IRLED = MISO  # placeholder pin?
+PIN_MOTL0 = board.A4
 PIN_MOTL1 = board.A5
 PIN_MOTR0 = board.A2  # these pins replacing IR stuff
 PIN_MOTR1 = board.A3
@@ -83,24 +82,6 @@ motR0 = pwmio.PWMOut(PIN_MOTR0)
 motR1 = pwmio.PWMOut(PIN_MOTR1)
 motR = motor.DCMotor(motR0, motR1)
 motR.FAST_DECAY = 1
-
-# SPI stuff
-'''
- any free digital I/O pin to rpi CS/chip select
- most chips expect CS line to be held high when they aren’t in use
- then pulled low when the processor is talking to them,
- but check your device’s datasheet
-'''
-PIN_CS = board.RX  # placeholder pin
-cs = digitalio.DigitalInOut(PIN_CS)
-cs.direction = digitalio.Direction.OUTPUT
-spi = busio.SPI(SCK, MISO, MOSI)
-raspi = SPIDevice(spi, cs, baudrate=5000000, polarity=0, phase=0)  # need to look up for our rpi
-'''
- the SPI device class only supports devices with a chip select
- and whose chip select is asserted with a low logic signal.
- otherwise we have to lock/unlock spi and enable/disable cs manually
-'''
 
 DUTY_MAX = 2**16-1
 
@@ -118,14 +99,13 @@ LEFT = ButtonPacket.LEFT
 RIGHT = ButtonPacket.RIGHT
 
 
->>>>>>> main
-
 def error(err_string):
     raise Exception(err_string)
 
 
 def motor_level(level, mot):  # input is range of percents, -100 to 100
     mot.throttle = float(level/100)
+
 
 def distance(enc_change0, enc_change1):  # is there some way to use magnetometer w/ this?
     enc_change = (enc_change0 + enc_change1)/2
@@ -146,69 +126,30 @@ def new_vect(ang, dist):  # takes radians and cm
     vect[1] = float(dist) * sin(ang)
     return vect
 
-# IR stuff
-'''
- puslein object can be read as a list. after pulsein[0] which is the time spent waiting for first detected high
- in ms, it then gives how long it detected that pulse at pulsein[1]. this gives the duration of pulse high for odd
- numbers and the time waiting for even numbers of pulsein[x]
- if i set the IR LED to a 50% duty cycle with a like 1 kHz frequency, i can say that if the difference in is
- pulsein[i]-pulsein[i-1] >= 100, there is a drop?
 
- the decoder will remove long starting pulse width
- read_pulses function will wait for a remote control press to be detected
- (or if one had previously happened and not been processed it will grab it instead
-'''
-
-# commented out because it holds up program waiting for signal w/ no IR
-#pulse = decoder.read_pulses(pulsein)  # look at the decoder code and note behavior
-#pulse2 = decoder.read_pulses(pulsein)
-def fuzzy_pulse_compare(pulse1, pulse2, fuzzyness=0.1):  # interpret matching signals from IR sensor
-    if len(pulse1) != len(pulse2):
-        return False
-    for i in range(len(pulse1)):
-        threshold = int(pulse1[i] * fuzzyness)
-        if abs(pulse1[i] - pulse2[i]) > threshold:
-            return False
-    return True
-#fuzzy_pulse_compare(pulse, pulse2)
+# UART stuff for RPI
+rpi_write = UART(TX, RX, baudrate=9600, timeout=1)
+#rpi_read = UART(SCL, SDA, baudrate=9600)  # need pull up resistor for this
 
 
-def cliff_function(ir_stuff):
-    ir_stuff = 0
+def send_bytes(origin_data):  # TODO send bytes representing data through SPI
+    for count0, d_list in enumerate(origin_data):
+        for value in d_list:
+            rpi_write.write(bytes(struct.pack("d", float(value))))  # use struct.unpack to get float back
 
 
-def vector_store(vec_list, outfile):
-    # JSON stuff here?
-    json = "jason"
+def read_uart(numbytes):
+    data = rpi_write.read(numbytes)  # change this if we get a second set of RX TX pins
+    if data is not None:
+        try:
+            data_string = struct.unpack("d", data)
+            print(data_string)
+        except:
+            print("No data found.")
 
-# how to use SPI
-with raspi:
-    result = bytearray(4)  # 4 byte buffer is created to hold the result of the SPI read
-    spi.readinto(result)  #  called to read 4 bytes of data from the rpi
-print(result)  # need to check rpi’s datasheet to see how to interpret the data
-# can also use the busio.SPI.write() function to send data over the MOSI line in bytes
-# for example
-with raspi:
-    spi.write(bytes([0x01, 0xFF]))
-'''
- CS line is asserted for the entire with statement block,
- so if you need to make two different transactions
- be sure to put them in their own with statement blocks
-'''
 
-# to try multiple I2C devices for sunday
-#while not i2c.try_lock():
-#    pass
- 
-try:
-    print("I2C addresses found:", [hex(device_address) for device_address in i2c.scan()])
-except: 
-    print("No I2C addresses found")
-
-# Unlock I2C now that we're done scanning.
-i2c.unlock()
-# https://e2e.ti.com/blogs_/b/analogwire/posts/how-to-simplify-i2c-tree-when-connecting-multiple-slaves-to-an-i2c-master
-
+def cliff_function(IR_Thing):  #TODO create instance for IR receiver and make this function output true when cliff
+    stuff = 0
 
 # States of state machine
 class state_machine():
