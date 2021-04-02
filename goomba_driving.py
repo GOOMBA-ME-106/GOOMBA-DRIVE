@@ -3,6 +3,7 @@
 #
 # Written by Ryan Sands (sandsryanj@gmail.com)
 #   v0.8 25-Mar-2021 Drafting of functions for sensors and classes for state machine
+#   v0.9 26-Mar-2021 Initial version of state machine to handle 5 events. Needs to finish sensor handling
 
 import board
 from board import SCL, SDA, SCK, MOSI, MISO, RX, TX
@@ -106,18 +107,6 @@ def motor_level(level, mot):  # input is range of percents, -100 to 100
     mot.throttle = float(level/100)
 
 
-def turning(direction, mag=75):
-    direc = str(direction).upper()
-    if direc == "LEFT":
-        motor_level(mag, motL)
-        motor_level(-mag, motR)
-    elif direc == "RIGHT":
-        motor_level(mag, motR)
-        motor_level(-mag, motL)
-    else:
-        print(direction, "is not a valid direction to turn.")
-
-
 def distance(enc_change0, enc_change1):  # is there some way to use magnetometer w/ this?
     enc_change = (enc_change0 + enc_change1)/2
     dist = enc_change * constant
@@ -136,19 +125,6 @@ def new_vect(ang, dist):  # takes radians and cm
     vect[0] = float(dist) * cos(ang)
     vect[1] = float(dist) * sin(ang)
     return vect
-
-
-def motor_test(mot1, mot2, drive_time, mag=60):
-    drive = drive_time/2
-    motor_level(mag, mot1)
-    motor_level(mag, mot2)
-    time.sleep(drive)
-    motor_level(-mag, mot1)
-    motor_level(-mag, mot2)
-    time.sleep(drive)
-    motor_level(0, mot1)
-    motor_level(0, mot2)
-    time.sleep(0.1)
 
 
 # UART stuff for RPI
@@ -172,92 +148,97 @@ def read_uart(numbytes):
             print("No data found.")
 
 
+def cliff_function(IR_Thing):  #TODO create instance for IR receiver and make this function output true when cliff
+    stuff = 0
+
+# States of state machine
+class state_machine():
+    go = None
+
+    def __init__(self, initial_state, motL, motR, magneto):
+        self.state = str(initial_state).upper()
+        self.mot1 = motL
+        self.mot2 = motR
+        self.magnet = magneto
+
+    def forward(self, speed):
+        motor_level(speed, self.mot1)
+        motor_level(speed, self.mot2)
+    
+    def idle(self, ignite):
+        motor_level(0, self.mot1)
+        motor_level(0, self.mot2)
+        if ignite is True:
+            self.state = "LOCATE"
+    
+    def locate(self, encL, encR, start):  # for initialization
+        thing = [[(0, 0, 0), (0, 0)], [(0, 0, 0), (0, 0)]]
+        thing[0][0] = self.magnet.magnetic
+        thing[0][1] = (encL.position, encR.position)
+        self.state = "FORWARD"
+        return thing
+    
+    def locate(self, encL, encR):  # for use between turning and forward
+        thing = [[(0, 0, 0), (0, 0)], [(0, 0, 0), (0, 0)]]
+        thing[0][0] = self.magnet.magnetic
+        thing[0][1] = (encL.position, encR.position)
+        self.state = "TURN"
+        return thing
+
+    def turn(self, direction, mag=20):
+        direc = str(direction).upper()
+        if direc == "LEFT":
+            motor_level(mag, motL)
+            motor_level(-mag, motR)
+        elif direc == "RIGHT":
+            motor_level(mag, motR)
+            motor_level(-mag, motL)
+        else:
+            print(direction, "is not a valid direction to turn.")
+
+
 # Main loop
-step = 5
-speed1 = 0
-speed2 = 0
-test_q = "Y"
-while True:  # the testing loop
-    ble.start_advertising(advertisement)
-    while not ble.connected:
-        #dists = [sonarL.distance, sonarF.distance, sonarR.distance]
-        #dists = [sonarL.distance]
-        encs = [encL.position, encR.position]
-        #print("Sonar distances: {:.2f}L {:.2f}F {:.2f}R (cm)".format(*dists))
-        #print(dists)
-        print('Magnetometer: {0:10.2f}X {1:10.2f}Y {2:10.2f}Z uT'.format(*lis3.magnetic))
-        print('Encoders: {0:10.2f}L {1:10.2f}R pulses'.format(*encs))
-        print("Acceleration: {:.2f} {:.2f} {:.2f} m/s^2".format(*lsm6.acceleration))
+vector_array = {}
+origins = [[(0, 0, 0), (0, 0)], [(0, 0, 0), (0, 0)]]  # would this part be easier with object oriented programming?
+i = 0
+start = "IDLE"
+s_threshhold = 30  # in cm
+goomba = state_machine(start, motL, motR, lis3)
+while True:  # actual main loop
+    #start_button = some input here
+    if goomba.state == "IDLE":
+        goomba.idle(start_button) # button input could be used from the bluefruit
+    elif goomba.state == "LOCATE":
+        origins[i] = goomba.locate(encL, encR, TRUE)
+        i += 1
+    elif goomba.state == "FORWARD":
+        goomba.forward(60)
+        if (sonarL.distance <= s_threshhold) and (sonarF.distance <= s_threshhold):
+            origins[i] = goomba.locate(encL, encR)
+            i += 1 # i want the origin to only grab one list of values when it starts turning
+            # then one when it stops
+            goomba.go = "RIGHT"
+        elif (sonarR.distance <= s_threshhold) and (sonarF.distance <= s_threshhold):
+            origins[i] = goomba.locate(encL, encR)
+            i += 1 
+            goomba.go = "LEFT"
+        elif cliff_function() is True:
+            origins[i] = goomba.locate(encL, encR)
+            i += 1 
+            goomba.go = "RIGHT"
+        elif start_button is True:
+            goomba.state = "IDLE"
+        
+    elif goomba.state == "TURN":
+        goomba.turn(goomba.go)
+        if (sonarF.distance >= s_threshhold) and (cliff_function() is False):
+            origins[i] = goomba.locate(encL, encR)
+            i += 1
+            goomba.state = "FORWARD"
+        elif start_button is True:
+            goomba.state = "IDLE"
 
-        time.sleep(0.5)
-        if test_q != "skip":
-            mot_test0 = input("Test motors? /n Y or N ")
-            mot_test1 = mot_test0.upper()
-            test_q = mot_test0
-            if (mot_test1 == "END"):
-                break
-
-            uart_test0 = input("Test UART? /n Y or N ")
-            uart_test1 = uart_test0.upper()
-            if test_q != "skip":
-                test_q = uart_test0
-            if (uart_test1 == "END"):
-                break
-            elif mot_test1 == "Y":
-                duration = float(input("How long? "))
-                motor_test(motL, motR, duration)
-            elif uart_test1 == "Y":
-                origins = [dists, encs, lis3.magnetic, lsm6.acceleration]
-                send_bytes(origins)
-                read_uart(8)
-
-    # Now we're connected
-    while ble.connected:
-        if uart.in_waiting:
-            packet = Packet.from_stream(uart)
-            if isinstance(packet, ButtonPacket):
-                if packet.pressed:
-                    if packet.button == B1:
-                        # The 1 button was pressed.
-                        print("1 button pressed! It was super effective!")
-                        speed1 = 90
-                        speed2 = 90
-                    elif packet.button == UP:
-                        # The UP button was pressed.
-                        print("UP button pressed! The left motor's speed sharply rose!")
-                        if speed1 != 100:
-                            speed1 += step
-                    elif packet.button == DOWN:
-                        # The DOWN button was pressed.
-                        print("DOWN button pressed! The  left motor's speed sharply fell!")
-                        if speed1 != -100:
-                            speed1 += -step
-                    elif packet.button == LEFT:
-                        # The LEFT button was pressed.
-                        print("LEFT button pressed! The right motor's speed sharply fell!")
-                        if speed2 != -100:
-                            speed2 += -step
-                    elif packet.button == RIGHT:
-                        # The RIGHT button was pressed.
-                        print("RIGHT button pressed! The right motor's speed sharply rose!")
-                        if speed2 != 100:
-                            speed2 += step
-                    elif packet.button == B2:
-                        # The 2 button was pressed.
-                        print("2 button pressed! It was super effective but in reverse?")
-                        speed1 = -90
-                        speed2 = -90
-                    elif packet.button == B3:
-                        # The 3 button was pressed.
-                        print("3 button pressed! It used telepathy.")
-                        #origins = [dists, encs, lis3.magnetic, lsm6.acceleration]
-                        origins = [encs, lis3.magnetic, lsm6.acceleration]
-                        send_bytes(origins)
-                        read_uart(8)
-                    elif packet.button == B4:
-                        # The 4 button was pressed.
-                        print("4 button pressed! It was a one hit KO!")
-                        speed1 = 0
-                        speed2 = 0
-        motor_level(speed1, motL)
-        motor_level(speed2, motR)
+# this state machine can take 5 events:
+# true or false input for cliffs
+# less than threshold value on any of the left front or right sonar
+# and taking some sort of reset button
