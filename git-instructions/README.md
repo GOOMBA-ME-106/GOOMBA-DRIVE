@@ -15,7 +15,7 @@ Select your branch
 
 ![image](./images/branching.png)
 
-If you get this prompt,  close the prompt. Then click fetch origin on the GIthub Desktop and close and reopen the file in question as it needs to be refreshed.
+If you get this prompt, this means that you have made changes to the file that haven't been committed to that branch so the changes are only local. If you want to pick up where you left off on that branch later, leave the changes to that branch and restore them when you get back to that branch.
 
 ![image](./images/prompt.png)
 
