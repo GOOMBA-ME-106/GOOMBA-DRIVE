@@ -19,8 +19,7 @@ import adafruit_hcsr04  # sonar sensor
 import adafruit_lsm6ds.lsm6ds33  # acceleromter
 from adafruit_motor import motor
 
-from math import cos
-from math import sin
+from math import cos, sin, atan2, degrees
 
 from adafruit_ble import BLERadio  # for testing motors remotely
 from adafruit_ble.advertising.standard import ProvideServicesAdvertisement
@@ -71,7 +70,7 @@ decoder = adafruit_irremote.GenericDecode()
 PIN_IRLED = MISO  # placeholder pin?
 PIN_MOTL0 = board.A4
 PIN_MOTL1 = board.A5
-PIN_MOTR0 = board.A2  # these pins replacing IR stuff
+PIN_MOTR0 = board.A2
 PIN_MOTR1 = board.A3
 
 motL0 = pwmio.PWMOut(PIN_MOTL0)
@@ -125,6 +124,16 @@ def new_vect(ang, dist):  # takes radians and cm
     vect[0] = float(dist) * cos(ang)
     vect[1] = float(dist) * sin(ang)
     return vect
+
+def vector_2_degrees(self, x, y):
+    angle = degrees(atan2(y, x))
+    if angle < 0:
+        angle += 360
+    return angle
+
+ def magnet_angle(self, packets):
+    magnet_x, magnet_y, _ = packets
+    return self.vector_2_degrees(magnet_x, magnet_y)
 
 
 # UART stuff for RPI
