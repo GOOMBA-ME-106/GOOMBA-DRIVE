@@ -55,9 +55,9 @@ encL = rotaryio.IncrementalEncoder(PIN_ENC_L0, PIN_ENC_L1)
 encR = rotaryio.IncrementalEncoder(PIN_ENC_R0, PIN_ENC_R1)
 
 
-#sonarL = adafruit_hcsr04.HCSR04(trigger_pin=PIN_SON_L0, echo_pin=PIN_SON_L1)  # sonar dist in cm
-#sonarF = adafruit_hcsr04.HCSR04(trigger_pin=PIN_SON_F0, echo_pin=PIN_SON_F1)
-#sonarR = adafruit_hcsr04.HCSR04(trigger_pin=PIN_SON_R0, echo_pin=PIN_SON_R1)
+sonarL = adafruit_hcsr04.HCSR04(trigger_pin=PIN_SON_L0, echo_pin=PIN_SON_L1)  # sonar dist in cm
+sonarF = adafruit_hcsr04.HCSR04(trigger_pin=PIN_SON_F0, echo_pin=PIN_SON_F1)
+sonarR = adafruit_hcsr04.HCSR04(trigger_pin=PIN_SON_R0, echo_pin=PIN_SON_R1)
 
 i2c = board.I2C()
 lis3 = adafruit_lis3mdl.LIS3MDL(i2c)
@@ -138,7 +138,7 @@ def vector_2_degrees(self, x, y):
 
 # UART stuff for RPI
 rpi_write = UART(TX, RX, baudrate=9600, timeout=1)
-#rpi_read = UART(SCL, SDA, baudrate=9600)  # need pull up resistor for this
+#rpi_read = UART(SCL, SDA, baudrate=9600)  # need pull up resistor for this?
 
 
 def send_bytes(origin_data):  # TODO send bytes representing data through SPI
@@ -160,15 +160,17 @@ def read_uart(numbytes):
 def cliff_function(IR_Thing):  #TODO create instance for IR receiver and make this function output true when cliff
     stuff = 0
 
+
 # States of state machine
 class state_machine():
     go = None
 
-    def __init__(self, initial_state, motL, motR, magneto):
+    def __init__(self, initial_state, motL, motR, magneto, accel):
         self.state = str(initial_state).upper()
         self.mot1 = motL
         self.mot2 = motR
         self.magnet = magneto
+        self.accel = accel
 
     def forward(self, speed):
         motor_level(speed, self.mot1)
@@ -180,10 +182,11 @@ class state_machine():
         if ignite is True:
             self.state = "LOCATE"
     
-    def locate(self, encL, encR, start):  # for initialization
+    def locate_start(self, encL, encR):  # for initialization
         thing = [[(0, 0, 0), (0, 0)], [(0, 0, 0), (0, 0)]]
         thing[0][0] = self.magnet.magnetic
         thing[0][1] = (encL.position, encR.position)
+        thing[0][2] = self.accel.acceleration
         self.state = "FORWARD"
         return thing
     
@@ -191,6 +194,7 @@ class state_machine():
         thing = [[(0, 0, 0), (0, 0)], [(0, 0, 0), (0, 0)]]
         thing[0][0] = self.magnet.magnetic
         thing[0][1] = (encL.position, encR.position)
+        thing[0][2] = self.accel.acceleration
         self.state = "TURN"
         return thing
 
@@ -214,11 +218,12 @@ start = "IDLE"
 s_threshhold = 30  # in cm
 goomba = state_machine(start, motL, motR, lis3)
 while True:  # actual main loop
+    # insert bluetooth stuff
     #start_button = some input here
     if goomba.state == "IDLE":
         goomba.idle(start_button) # button input could be used from the bluefruit
     elif goomba.state == "LOCATE":
-        origins[i] = goomba.locate(encL, encR, TRUE)
+        origins[i] = goomba.locate_start(encL, encR)
         i += 1
     elif goomba.state == "FORWARD":
         goomba.forward(60)
