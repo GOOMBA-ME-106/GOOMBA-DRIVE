@@ -2,19 +2,19 @@
 #   For use with the EduShields TriplerBaseboard
 #
 # Written by Ryan Sands (sandsryanj@gmail.com)
-#   v0.8 25-Mar-2021 Drafting of functions for sensors and classes for state machine
-#   v0.9 26-Mar-2021 Initial version of state machine to handle 5 events. Needs to finish sensor handling
+#   v0.80 25-Mar-2021 Drafting of functions for sensors and classes for state machine
+#   v0.90 26-Mar-2021 Initial version of state machine to handle 5 events. Needs to finish sensor handling
+#   v0.91 11-Apr-2021 Added sharp-gp2y0a21yk0f cliff sensor functionality and bluetooth
 
 import board
 from board import SCL, SDA, SCK, MOSI, MISO, RX, TX
 import pwmio
+from analogio import AnalogIn
 import rotaryio
-import pulseio  # pulseio for IR sensor
 import time
 import struct
 from busio import UART
 import adafruit_lis3mdl  # magnetometer
-import adafruit_irremote
 import adafruit_hcsr04  # sonar sensor
 import adafruit_lsm6ds.lsm6ds33  # acceleromter
 from adafruit_motor import motor
@@ -49,7 +49,7 @@ PIN_ENC_L1 = board.A1
 PIN_ENC_R0 = board.D12
 PIN_ENC_R1 = board.D13
 
-PIN_IR = MOSI  # placeholder pin?
+PIN_IR = board.A2  # MUST BE analog pin
 
 encL = rotaryio.IncrementalEncoder(PIN_ENC_L0, PIN_ENC_L1)
 encR = rotaryio.IncrementalEncoder(PIN_ENC_R0, PIN_ENC_R1)
@@ -63,15 +63,12 @@ i2c = board.I2C()
 lis3 = adafruit_lis3mdl.LIS3MDL(i2c)
 lsm6 = adafruit_lsm6ds.lsm6ds33.LSM6DS33(i2c)
 
-pulsein = pulseio.PulseIn(PIN_IR, maxlen=150, idle_state=True)
-decoder = adafruit_irremote.GenericDecode()
 
 # output pins
-PIN_IRLED = MISO  # placeholder pin?
 PIN_MOTL0 = board.A4
 PIN_MOTL1 = board.A5
-PIN_MOTR0 = board.A2
-PIN_MOTR1 = board.A3
+PIN_MOTR0 = SCK
+PIN_MOTR1 = MOSI
 
 motL0 = pwmio.PWMOut(PIN_MOTL0)
 motL1 = pwmio.PWMOut(PIN_MOTL1)
@@ -106,13 +103,25 @@ def motor_level(level, mot):  # input is range of percents, -100 to 100
     mot.throttle = float(level/100)
 
 
-def distance(enc_change0, enc_change1):  # is there some way to use magnetometer w/ this?
+def vector_2_degrees(self, x, y):  # we can prob move these over to the RPi
+    angle = degrees(atan2(y, x))
+    if angle < 0:
+        angle += 360
+    return angle
+
+
+def magnet_angle(self, packets):
+    magnet_x, magnet_y, _ = packets
+    return self.vector_2_degrees(magnet_x, magnet_y)
+
+
+def distance(enc_change0, enc_change1):
     enc_change = (enc_change0 + enc_change1)/2
     dist = enc_change * constant
     return dist
 
 
-def angle(enc_change0, enc_change1, prior_ang=0):  # is there some way to use magnetometer w/ this to verify?
+def angle(enc_change0, enc_change1, prior_ang=0):  # cross reference w/ magnetometer?
     enc_change = (enc_change0 + enc_change1)/2
     ang = enc_change * constant
     ang_rad = ang * (3.141592/180) + prior_ang
@@ -124,16 +133,6 @@ def new_vect(ang, dist):  # takes radians and cm
     vect[0] = float(dist) * cos(ang)
     vect[1] = float(dist) * sin(ang)
     return vect
-
-def vector_2_degrees(self, x, y):
-    angle = degrees(atan2(y, x))
-    if angle < 0:
-        angle += 360
-    return angle
-
- def magnet_angle(self, packets):
-    magnet_x, magnet_y, _ = packets
-    return self.vector_2_degrees(magnet_x, magnet_y)
 
 
 # UART stuff for RPI
@@ -157,18 +156,16 @@ def read_uart(numbytes):
             print("No data found.")
 
 
-def cliff_function(IR_Thing):  #TODO create instance for IR receiver and make this function output true when cliff
-    stuff = 0
-
-
 # States of state machine
 class state_machine():
     go = None
 
-    def __init__(self, initial_state, motL, motR, magneto, accel):
+    def __init__(self, initial_state, motL, motR, encL, encR, magneto, accel):
         self.state = str(initial_state).upper()
         self.mot1 = motL
         self.mot2 = motR
+        self.encL = encL
+        self.encR = encR
         self.magnet = magneto
         self.accel = accel
 
@@ -182,20 +179,16 @@ class state_machine():
         if ignite is True:
             self.state = "LOCATE"
     
-    def locate_start(self, encL, encR):  # for initialization
-        thing = [[(0, 0, 0), (0, 0)], [(0, 0, 0), (0, 0)]]
+    def locate(self):  # for initialization
+        thing = [[(0, 0, 0), (0, 0), (0, 0, 0)], \
+            [(0, 0, 0), (0, 0), (0, 0, 0)]]
         thing[0][0] = self.magnet.magnetic
-        thing[0][1] = (encL.position, encR.position)
+        thing[0][1] = (self.encL.position, self.encR.position)
         thing[0][2] = self.accel.acceleration
-        self.state = "FORWARD"
-        return thing
-    
-    def locate(self, encL, encR):  # for use between turning and forward
-        thing = [[(0, 0, 0), (0, 0)], [(0, 0, 0), (0, 0)]]
-        thing[0][0] = self.magnet.magnetic
-        thing[0][1] = (encL.position, encR.position)
-        thing[0][2] = self.accel.acceleration
-        self.state = "TURN"
+        if self.state == "LOCATE":
+            self.state = "FORWARD"
+        else:
+            self.state = "TURN"
         return thing
 
     def turn(self, direction, mag=20):
@@ -208,49 +201,134 @@ class state_machine():
             motor_level(-mag, motL)
         else:
             print(direction, "is not a valid direction to turn.")
+        
+    def get_cliff_dist(self, pin):  # in cm, good for ~9 to ~30
+        an_in = AnalogIn(pin)
+        volt = (an_in.value * 3.3) / 65536
+        return (volt ** -1.173) * 29.988
 
+
+def cliff_function(dist):  #output true when cliff
+    if dist >= 20:
+        return True
+    else:
+        return False
+
+
+def motor_test(mot1, mot2, drive_time, mag=60):
+    drive = drive_time/2
+    motor_level(mag, mot1)
+    motor_level(mag, mot2)
+    time.sleep(drive)
+    motor_level(-mag, mot1)
+    motor_level(-mag, mot2)
+    time.sleep(drive)
+    motor_level(0, mot1)
+    motor_level(0, mot2)
+    time.sleep(0.1)
+
+
+testing = True
+last = time.monotonic()
+print_time = .2
+test_q = "Y"
 
 # Main loop
 vector_array = {}
-origins = [[(0, 0, 0), (0, 0)], [(0, 0, 0), (0, 0)]]  # would this part be easier with object oriented programming?
+origins = [[(0, 0, 0), (0, 0), (0, 0, 0)], \
+    [(0, 0, 0), (0, 0), (0, 0, 0)]]
 i = 0
 start = "IDLE"
 s_threshhold = 30  # in cm
-goomba = state_machine(start, motL, motR, lis3)
+start_button = None
+
+goomba = state_machine(start, motL, motR, encL, encR, lis3, lsm6)
 while True:  # actual main loop
-    # insert bluetooth stuff
-    #start_button = some input here
-    if goomba.state == "IDLE":
-        goomba.idle(start_button) # button input could be used from the bluefruit
-    elif goomba.state == "LOCATE":
-        origins[i] = goomba.locate_start(encL, encR)
-        i += 1
-    elif goomba.state == "FORWARD":
-        goomba.forward(60)
-        if (sonarL.distance <= s_threshhold) and (sonarF.distance <= s_threshhold):
-            origins[i] = goomba.locate(encL, encR)
-            i += 1 # i want the origin to only grab one list of values when it starts turning
-            # then one when it stops
-            goomba.go = "RIGHT"
-        elif (sonarR.distance <= s_threshhold) and (sonarF.distance <= s_threshhold):
-            origins[i] = goomba.locate(encL, encR)
-            i += 1 
-            goomba.go = "LEFT"
-        elif cliff_function() is True:
-            origins[i] = goomba.locate(encL, encR)
-            i += 1 
-            goomba.go = "RIGHT"
-        elif start_button is True:
-            goomba.state = "IDLE"
-        
-    elif goomba.state == "TURN":
-        goomba.turn(goomba.go)
-        if (sonarF.distance >= s_threshhold) and (cliff_function() is False):
-            origins[i] = goomba.locate(encL, encR)
+    ble.start_advertising(advertisement)
+    while not ble.connected:  # for testing while connected
+        #dists = [sonarL.distance, sonarF.distance, sonarR.distance]
+        #dists = [sonarL.distance]
+        encs = [encL.position, encR.position]
+        #print("Sonar distances: {:.2f}L {:.2f}F {:.2f}R (cm)".format(*dists))
+        #print(dists)
+        print('Magnetometer: {0:10.2f}X {1:10.2f}Y {2:10.2f}Z uT'.format(*lis3.magnetic))
+        print('Encoders: {0:10.2f}L {1:10.2f}R pulses'.format(*encs))
+        print("Acceleration: {:.2f} {:.2f} {:.2f} m/s^2".format(*lsm6.acceleration))
+
+        time.sleep(print_time)
+        if test_q != "skip":
+            mot_test0 = input("Test motors? /n Y or N ")
+            mot_test1 = mot_test0.upper()
+            test_q = mot_test0
+            if (mot_test1 == "END"):
+                break
+
+            uart_test0 = input("Test UART? /n Y or N ")
+            uart_test1 = uart_test0.upper()
+            if test_q != "skip":
+                test_q = uart_test0
+            if (uart_test1 == "END"):
+                break
+            elif mot_test1 == "Y":
+                duration = float(input("How long? "))
+                motor_test(motL, motR, duration)
+            elif uart_test1 == "Y":
+                origins = [dists, encs, lis3.magnetic, lsm6.acceleration]
+                send_bytes(origins)
+                read_uart(8)
+
+    while ble.connected:
+        if testing:
+            if time.monotonic() - last > print_time:
+                print(goomba.state)
+                last = time.monotonic()
+        if uart.in_waiting:
+            packet = Packet.from_stream(uart)
+            if isinstance(packet, ButtonPacket):
+                if packet.pressed:
+                    if packet.button == B1:
+                        start_button = True
+                        print("Button 1 pressed! It was a reset?!")
+                    elif packet.button == B2:
+                        #some way to send origins in an organized manner?
+                        print("Button 2 pressed! Data by UART WIP.")
+                        pass
+                    else:
+                        start_button = False
+                        
+        if goomba.state == "IDLE":
+            goomba.idle(start_button)
+            start_button = False
+        elif goomba.state == "LOCATE":
+            origins[i] = goomba.locate()
             i += 1
-            goomba.state = "FORWARD"
-        elif start_button is True:
-            goomba.state = "IDLE"
+        elif goomba.state == "FORWARD":
+            goomba.forward(60)
+            if (sonarL.distance <= s_threshhold) and (sonarF.distance <= s_threshhold):
+                origins[i] = goomba.locate()
+                i += 1
+                goomba.go = "RIGHT"
+            elif (sonarR.distance <= s_threshhold) and (sonarF.distance <= s_threshhold):
+                origins[i] = goomba.locate()
+                i += 1 
+                goomba.go = "LEFT"
+            elif cliff_function() is True:
+                origins[i] = goomba.locate()
+                i += 1 
+                goomba.go = "RIGHT"
+            elif start_button is True:
+                goomba.state = "IDLE"
+                start_button = False
+            
+        elif goomba.state == "TURN":
+            goomba.turn(goomba.go)
+            if (sonarF.distance >= s_threshhold) and (cliff_function() is False):
+                origins[i] = goomba.locate()
+                i += 1
+                goomba.state = "FORWARD"
+            elif start_button is True:
+                goomba.state = "IDLE"
+                start_button = False
 
 # this state machine can take 5 events:
 # true or false input for cliffs
