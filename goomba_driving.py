@@ -208,7 +208,6 @@ class state_machine():
         return (volt ** -1.173) * 29.988
 
 
-
 def cliff_function(dist):  #output true when cliff
     if dist >= 20:
         return True
@@ -233,6 +232,7 @@ testing = True
 last = time.monotonic()
 print_time = .2
 test_q = "Y"
+
 # Main loop
 vector_array = {}
 origins = [[(0, 0, 0), (0, 0), (0, 0, 0)], \
