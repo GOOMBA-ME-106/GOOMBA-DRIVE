@@ -4,18 +4,17 @@
 # Written by Ryan Sands (sandsryanj@gmail.com)
 #   v0.80 25-Mar-2021 Drafting of functions for sensors and classes for state machine
 #   v0.90 26-Mar-2021 Initial version of state machine to handle 5 events. Needs to finish sensor handling
-#   v0.91 11-Apr-2021 Added sharp-gp2y0a21yk0f cliff sensor functionality
+#   v0.91 11-Apr-2021 Added sharp-gp2y0a21yk0f cliff sensor functionality and bluetooth
 
 import board
 from board import SCL, SDA, SCK, MOSI, MISO, RX, TX
 import pwmio
+from analogio import AnalogIn
 import rotaryio
 import time
 import struct
 from busio import UART
 import adafruit_lis3mdl  # magnetometer
-import pulseio  # pulseio for IR sensor
-import adafruit_irremote
 import adafruit_hcsr04  # sonar sensor
 import adafruit_lsm6ds.lsm6ds33  # acceleromter
 from adafruit_motor import motor
@@ -56,9 +55,9 @@ encL = rotaryio.IncrementalEncoder(PIN_ENC_L0, PIN_ENC_L1)
 encR = rotaryio.IncrementalEncoder(PIN_ENC_R0, PIN_ENC_R1)
 
 
-#sonarL = adafruit_hcsr04.HCSR04(trigger_pin=PIN_SON_L0, echo_pin=PIN_SON_L1)  # sonar dist in cm
-#sonarF = adafruit_hcsr04.HCSR04(trigger_pin=PIN_SON_F0, echo_pin=PIN_SON_F1)
-#sonarR = adafruit_hcsr04.HCSR04(trigger_pin=PIN_SON_R0, echo_pin=PIN_SON_R1)
+sonarL = adafruit_hcsr04.HCSR04(trigger_pin=PIN_SON_L0, echo_pin=PIN_SON_L1)  # sonar dist in cm
+sonarF = adafruit_hcsr04.HCSR04(trigger_pin=PIN_SON_F0, echo_pin=PIN_SON_F1)
+sonarR = adafruit_hcsr04.HCSR04(trigger_pin=PIN_SON_R0, echo_pin=PIN_SON_R1)
 
 i2c = board.I2C()
 lis3 = adafruit_lis3mdl.LIS3MDL(i2c)
@@ -111,7 +110,7 @@ def vector_2_degrees(self, x, y):  # we can prob move these over to the RPi
     return angle
 
 
- def magnet_angle(self, packets):
+def magnet_angle(self, packets):
     magnet_x, magnet_y, _ = packets
     return self.vector_2_degrees(magnet_x, magnet_y)
 
@@ -161,10 +160,12 @@ def read_uart(numbytes):
 class state_machine():
     go = None
 
-    def __init__(self, initial_state, motL, motR, magneto, accel):
+    def __init__(self, initial_state, motL, motR, encL, encR, magneto, accel):
         self.state = str(initial_state).upper()
         self.mot1 = motL
         self.mot2 = motR
+        self.encL = encL
+        self.encR = encR
         self.magnet = magneto
         self.accel = accel
 
@@ -178,20 +179,16 @@ class state_machine():
         if ignite is True:
             self.state = "LOCATE"
     
-    def locate_start(self, encL, encR):  # for initialization
-        thing = [[(0, 0, 0), (0, 0)], [(0, 0, 0), (0, 0)]]
+    def locate(self):  # for initialization
+        thing = [[(0, 0, 0), (0, 0), (0, 0, 0)], \
+            [(0, 0, 0), (0, 0), (0, 0, 0)]]
         thing[0][0] = self.magnet.magnetic
-        thing[0][1] = (encL.position, encR.position)
+        thing[0][1] = (self.encL.position, self.encR.position)
         thing[0][2] = self.accel.acceleration
-        self.state = "FORWARD"
-        return thing
-    
-    def locate(self, encL, encR):  # for use between turning and forward
-        thing = [[(0, 0, 0), (0, 0)], [(0, 0, 0), (0, 0)]]
-        thing[0][0] = self.magnet.magnetic
-        thing[0][1] = (encL.position, encR.position)
-        thing[0][2] = self.accel.acceleration
-        self.state = "TURN"
+        if self.state == "LOCATE":
+            self.state = "FORWARD"
+        else:
+            self.state = "TURN"
         return thing
 
     def turn(self, direction, mag=20):
@@ -213,7 +210,7 @@ class state_machine():
 
 
 def cliff_function(dist):  #output true when cliff
-    if dist >= 20 :
+    if dist >= 20:
         return True
     else:
         return False
@@ -232,15 +229,20 @@ def motor_test(mot1, mot2, drive_time, mag=60):
     time.sleep(0.1)
 
 
+testing = True
+last = time.monotonic()
+print_time = .2
+test_q = "Y"
 # Main loop
 vector_array = {}
-origins = [[(0, 0, 0), (0, 0)], [(0, 0, 0), (0, 0)]]  # would this part be easier with object oriented programming?
+origins = [[(0, 0, 0), (0, 0), (0, 0, 0)], \
+    [(0, 0, 0), (0, 0), (0, 0, 0)]]
 i = 0
 start = "IDLE"
 s_threshhold = 30  # in cm
 start_button = None
 
-goomba = state_machine(start, motL, motR, lis3)
+goomba = state_machine(start, motL, motR, encL, encR, lis3, lsm6)
 while True:  # actual main loop
     ble.start_advertising(advertisement)
     while not ble.connected:  # for testing while connected
@@ -253,7 +255,7 @@ while True:  # actual main loop
         print('Encoders: {0:10.2f}L {1:10.2f}R pulses'.format(*encs))
         print("Acceleration: {:.2f} {:.2f} {:.2f} m/s^2".format(*lsm6.acceleration))
 
-        time.sleep(0.5)
+        time.sleep(print_time)
         if test_q != "skip":
             mot_test0 = input("Test motors? /n Y or N ")
             mot_test1 = mot_test0.upper()
@@ -276,6 +278,10 @@ while True:  # actual main loop
                 read_uart(8)
 
     while ble.connected:
+        if testing:
+            if time.monotonic() - last > print_time:
+                print(goomba.state)
+                last = time.monotonic()
         if uart.in_waiting:
             packet = Packet.from_stream(uart)
             if isinstance(packet, ButtonPacket):
@@ -291,24 +297,23 @@ while True:  # actual main loop
                         start_button = False
                         
         if goomba.state == "IDLE":
-            goomba.idle(start_button) # button input could be used from the bluefruit
+            goomba.idle(start_button)
             start_button = False
         elif goomba.state == "LOCATE":
-            origins[i] = goomba.locate_start(encL, encR)
+            origins[i] = goomba.locate()
             i += 1
         elif goomba.state == "FORWARD":
             goomba.forward(60)
             if (sonarL.distance <= s_threshhold) and (sonarF.distance <= s_threshhold):
-                origins[i] = goomba.locate(encL, encR)
-                i += 1 # i want the origin to only grab one list of values when it starts turning
-                # then one when it stops
+                origins[i] = goomba.locate()
+                i += 1
                 goomba.go = "RIGHT"
             elif (sonarR.distance <= s_threshhold) and (sonarF.distance <= s_threshhold):
-                origins[i] = goomba.locate(encL, encR)
+                origins[i] = goomba.locate()
                 i += 1 
                 goomba.go = "LEFT"
             elif cliff_function() is True:
-                origins[i] = goomba.locate(encL, encR)
+                origins[i] = goomba.locate()
                 i += 1 
                 goomba.go = "RIGHT"
             elif start_button is True:
@@ -318,7 +323,7 @@ while True:  # actual main loop
         elif goomba.state == "TURN":
             goomba.turn(goomba.go)
             if (sonarF.distance >= s_threshhold) and (cliff_function() is False):
-                origins[i] = goomba.locate(encL, encR)
+                origins[i] = goomba.locate()
                 i += 1
                 goomba.state = "FORWARD"
             elif start_button is True:
