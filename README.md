@@ -12,8 +12,8 @@ There are two DC brushed motors to control the two wheels. They are driven by tw
 Needed libraries for CircuitPython can be found [here](https://learn.adafruit.com/adafruit-feather-sense/feather-sense-circuitpython-libraries "Feather Sense CircuitPython Libraries")
 The needed libraries from there are:
 - adafruit_lis3mdl
-- adafruit_irremote
 - adafruit_hcsr04
+- adafruit_lsm6ds.lsm6ds33
 - adafruit_motor
 
 and probably  
