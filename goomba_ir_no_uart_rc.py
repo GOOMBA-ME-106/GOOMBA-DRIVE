@@ -50,6 +50,7 @@ PIN_ENC_R0 = board.D12
 PIN_ENC_R1 = board.D13
 
 PIN_IR = board.A2  # MUST BE analog pin
+IR = AnalogIn(PIN_IR)
 
 encL = rotaryio.IncrementalEncoder(PIN_ENC_L0, PIN_ENC_L1)
 encR = rotaryio.IncrementalEncoder(PIN_ENC_R0, PIN_ENC_R1)
@@ -195,10 +196,13 @@ class state_machine():
         else:
             print(direction, "is not a valid direction to turn.")
         
-    def get_cliff_dist(self, pin):  # in cm, good for ~9 to ~30
-        an_in = AnalogIn(pin)
-        volt = (an_in.value * 3.3) / 65536
-        return (volt ** -1.173) * 29.988
+    def cliff_dist(self, cliff):  # in cm, good for ~9 to ~30
+        volt = (cliff.value * 3.3) / 65536
+        try:
+            return (volt ** -1.173) * 29.988
+        except ZeroDivisionError:
+            print("The cliff sensor is giving bad readings.")
+            time.sleep(0.05)
 
 
 def cliff_function(dist):  #output true when cliff
@@ -250,7 +254,7 @@ while True:  # actual main loop
         print('Magnetometer: {0:10.2f}X {1:10.2f}Y {2:10.2f}Z uT'.format(*lis3.magnetic))
         print('Encoders: {0:10.2f}L {1:10.2f}R pulses'.format(*encs))
         print("Acceleration: {:.2f} {:.2f} {:.2f} m/s^2".format(*lsm6.acceleration))
-        cliff = goomba.get_cliff_dist(PIN_IR)
+        cliff = goomba.cliff_dist(IR)
         print("Cliff distance:", cliff, "cm")
         print("Cliff?", cliff_function(cliff), "cm")
 
