@@ -1,5 +1,5 @@
 # goomba_driving.py - ME 106 Project Code
-#   For use with the EduShields TriplerBaseboard
+#   nRF52840 Feathersense microcontroller. no TriplerBaseBoard.
 #
 # Written by Ryan Sands (sandsryanj@gmail.com)
 #   v0.80 25-Mar-2021 Drafting of functions for sensors and classes for state machine
