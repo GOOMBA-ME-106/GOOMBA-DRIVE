@@ -3,7 +3,7 @@
 #
 # Written by Ryan Sands (sandsryanj@gmail.com)
 #   v0.80 25-Mar-2021 Drafting of functions for sensors and classes for state machine
-#   v0.90 26-Mar-2021 Initial version of state machine to handle 5 events. Needs to finish sensor handling
+#   v0.90 26-Mar-2021 Initial version of state machine to handle 5 events. ~Needs to finish sensor handling~
 #   v0.91 11-Apr-2021 Added sharp-gp2y0a21yk0f cliff sensor functionality and bluetooth
 
 import board
@@ -113,7 +113,7 @@ def vector_2_degrees(x, y):  # we can prob move these over to the RPi
 
 def magnet_angle(packets):
     magnet_x, magnet_y, _ = packets
-    return self.vector_2_degrees(magnet_x, magnet_y)
+    return vector_2_degrees(magnet_x, magnet_y)
 
 
 def distance(enc_change0, enc_change1):
@@ -157,6 +157,7 @@ def read_uart(numbytes, rpi):
             print("No data found.")
 
 
+dists = []
 # States of state machine
 class state_machine():
     go = None
@@ -173,19 +174,21 @@ class state_machine():
     def forward(self, speed):
         motor_level(speed, self.mot1)
         motor_level(speed, self.mot2)
-    
+
     def idle(self, ignite):
         motor_level(0, self.mot1)
         motor_level(0, self.mot2)
         if ignite is True:
             self.state = "LOCATE"
-    
+
     def locate(self):  # for initialization
+        global dists
         thing = [[(0, 0, 0), (0, 0), (0, 0, 0)], \
             [(0, 0, 0), (0, 0), (0, 0, 0)]]
         thing[0][0] = self.magnet.magnetic
         thing[0][1] = (self.encL.position, self.encR.position)
         thing[0][2] = self.accel.acceleration
+        thing[0][3] = dists
         if self.state == "LOCATE":
             self.state = "FORWARD"
         else:
@@ -250,10 +253,10 @@ goomba = state_machine(start, motL, motR, encL, encR, lis3, lsm6)
 while True:  # actual main loop
     ble.start_advertising(advertisement)
     while not ble.connected:  # for testing while connected
-        #dists = [sonarL.distance, sonarF.distance, sonarR.distance]
+        dists = [sonarL.distance, sonarF.distance, sonarR.distance]
         #dists = [sonarL.distance]
         encs = [encL.position, encR.position]
-        #print("Sonar distances: {:.2f}L {:.2f}F {:.2f}R (cm)".format(*dists))
+        print("Sonar distances: {:.2f}L {:.2f}F {:.2f}R (cm)".format(*dists))
         #print(dists)
         print('Magnetometer: {0:10.2f}X {1:10.2f}Y {2:10.2f}Z uT'.format(*lis3.magnetic))
         print('Encoders: {0:10.2f}L {1:10.2f}R pulses'.format(*encs))
@@ -303,7 +306,8 @@ while True:  # actual main loop
                     else:
                         start_button = False
 
-        cliff = goomba.get_cliff_dist(IR)
+        cliff = goomba.cliff_dist(IR)
+        dists = [sonarL.distance, sonarF.distance, sonarR.distance]
         if goomba.state == "IDLE":
             goomba.idle(start_button)
             start_button = False
@@ -320,7 +324,7 @@ while True:  # actual main loop
                 origins[i] = goomba.locate()
                 i += 1 
                 goomba.go = "LEFT"
-            elif cliff_function() is True:
+            elif cliff_function(cliff) is True:
                 origins[i] = goomba.locate()
                 i += 1 
                 goomba.go = "RIGHT"
