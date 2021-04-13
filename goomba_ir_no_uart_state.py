@@ -104,14 +104,14 @@ def motor_level(level, mot):  # input is range of percents, -100 to 100
     mot.throttle = float(level/100)
 
 
-def vector_2_degrees(self, x, y):  # we can prob move these over to the RPi
+def vector_2_degrees(x, y):  # we can prob move these over to the RPi
     angle = degrees(atan2(y, x))
     if angle < 0:
         angle += 360
     return angle
 
 
-def magnet_angle(self, packets):
+def magnet_angle(packets):
     magnet_x, magnet_y, _ = packets
     return self.vector_2_degrees(magnet_x, magnet_y)
 
@@ -141,14 +141,14 @@ rpi_write = UART(TX, RX, baudrate=9600, timeout=1)
 #rpi_read = UART(SCL, SDA, baudrate=9600)  # need pull up resistor for this?
 
 
-def send_bytes(origin_data):  # TODO send bytes representing data through SPI
+def send_bytes(origin_data, rpi):
     for count0, d_list in enumerate(origin_data):
         for value in d_list:
-            rpi_write.write(bytes(struct.pack("d", float(value))))  # use struct.unpack to get float back
+            rpi.write(bytes(struct.pack("d", float(value))))  # use struct.unpack to get float back
 
 
-def read_uart(numbytes):
-    data = rpi_write.read(numbytes)  # change this if we get a second set of RX TX pins
+def read_uart(numbytes, rpi):
+    data = rpi.read(numbytes)
     if data is not None:
         try:
             data_string = struct.unpack("d", data)
@@ -281,8 +281,8 @@ while True:  # actual main loop
                 motor_test(motL, motR, duration)
             elif uart_test1 == "Y":
                 origins = [dists, encs, lis3.magnetic, lsm6.acceleration]
-                send_bytes(origins)
-                read_uart(8)
+                send_bytes(origins, rpi_write)
+                read_uart(8, rpi_write)
 
     while ble.connected:
         if testing:
