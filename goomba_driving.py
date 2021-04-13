@@ -101,8 +101,35 @@ def error(err_string):
 def motor_level(level, mot):  # input is range of percents, -100 to 100
     mot.throttle = float(level/100)
 
+# UART stuff for RPI
+rpi_write = UART(TX, RX, baudrate=9600, timeout=1)
+#rpi_read = UART(SCL, SDA, baudrate=9600)  # need pull up resistor for this?
 
-def vector_2_degrees(self, x, y):  # we can prob move these over to the RPi
+
+def send_bytes(origin_data):  # TODO choose how much and when to send data instead of just sending all of it
+    for count0, d_list in enumerate(origin_data):
+        for value in d_list:
+            rpi_write.write(bytes(struct.pack("d", float(value))))  # use struct.unpack to get float back
+
+
+def read_uart(numbytes):
+    data = rpi_write.read(numbytes)  # change this if we get a second set of RX TX pins
+    if data is not None:
+        try:
+            data_string = struct.unpack("d", data)
+            print(data_string)
+        except:
+            print("No data found.")
+
+def read_uart(numbytes):
+    data = uart_rpi.read(numbytes)
+    if data is not None:
+        data_string = struct.unpack("d", data)
+        print(data_string, end="")
+# may want to use MISO pin as a chipselect pin for communication
+
+# functions for RPi to interpret data?
+def vector_2_degrees(self, x, y):
     angle = degrees(atan2(y, x))
     if angle < 0:
         angle += 360
@@ -127,39 +154,12 @@ def angle(enc_change0, enc_change1, prior_ang=0):  # cross reference w/ magnetom
     return ang_rad
 
 
-def new_vect(ang, dist):  # takes radians and cm
+def new_vect(ang, dist):  # takes radians and cm for movement of goomba
     vect = []
     vect[0] = float(dist) * cos(ang)
     vect[1] = float(dist) * sin(ang)
     return vect
 
-
-# UART stuff for RPI
-rpi_write = UART(TX, RX, baudrate=9600, timeout=1)
-#rpi_read = UART(SCL, SDA, baudrate=9600)  # need pull up resistor for this?
-
-
-def send_bytes(origin_data):  # TODO send bytes representing data through SPI
-    for count0, d_list in enumerate(origin_data):
-        for value in d_list:
-            rpi_write.write(bytes(struct.pack("d", float(value))))  # use struct.unpack to get float back
-
-
-def read_uart(numbytes):
-    data = rpi_write.read(numbytes)  # change this if we get a second set of RX TX pins
-    if data is not None:
-        try:
-            data_string = struct.unpack("d", data)
-            print(data_string)
-        except:
-            print("No data found.")
-
-def read_uart(numbytes):
-    data = uart_rpi.read(numbytes)
-    if data is not None:
-        data_string = struct.unpack("d", data)
-        print(data_string, end="")
-# may want to use SCK pin as a chipselect pin for communication
 
 # States of state machine
 class state_machine():
