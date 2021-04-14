@@ -157,7 +157,6 @@ def read_uart(numbytes, rpi):
             print("No data found.")
 
 
-dists = []
 # States of state machine
 class state_machine():
     go = None
@@ -261,9 +260,9 @@ while True:  # actual main loop
         print('Magnetometer: {0:10.2f}X {1:10.2f}Y {2:10.2f}Z uT'.format(*lis3.magnetic))
         print('Encoders: {0:10.2f}L {1:10.2f}R pulses'.format(*encs))
         print("Acceleration: {:.2f} {:.2f} {:.2f} m/s^2".format(*lsm6.acceleration))
-        cliff = goomba.get_cliff_dist(IR)
+        cliff = goomba.cliff_dist(IR)
         print("Cliff distance:", cliff, "cm")
-        print("Cliff?", cliff_function(cliff), "cm")
+        print("Cliff?", cliff_function(cliff), "cm")  # TODO consolidate these functions
 
         time.sleep(print_time)
         if test_q != "skip":
@@ -325,7 +324,7 @@ while True:  # actual main loop
                 i += 1 
                 goomba.go = "LEFT"
             elif cliff_function(cliff) is True:
-                origins[i] = goomba.locate()
+                origins[i] = goomba.locate()  # TODO include cliff event in origin data
                 i += 1 
                 goomba.go = "RIGHT"
             elif start_button is True:

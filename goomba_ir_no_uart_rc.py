@@ -113,7 +113,7 @@ def vector_2_degrees(x, y):  # we can prob move these over to the RPi
 
 def magnet_angle(packets):
     magnet_x, magnet_y, _ = packets
-    return self.vector_2_degrees(magnet_x, magnet_y)
+    return vector_2_degrees(magnet_x, magnet_y)
 
 
 def distance(enc_change0, enc_change1):
@@ -166,13 +166,13 @@ class state_machine():
     def forward(self, speed):
         motor_level(speed, self.mot1)
         motor_level(speed, self.mot2)
-    
+
     def idle(self, ignite):
         motor_level(0, self.mot1)
         motor_level(0, self.mot2)
         if ignite is True:
             self.state = "LOCATE"
-    
+
     def locate(self):  # for initialization
         thing = [[(0, 0, 0), (0, 0), (0, 0, 0)], \
             [(0, 0, 0), (0, 0), (0, 0, 0)]]
@@ -195,7 +195,7 @@ class state_machine():
             motor_level(-mag, motL)
         else:
             print(direction, "is not a valid direction to turn.")
-        
+
     def cliff_dist(self, cliff):  # in cm, good for ~9 to ~30
         volt = (cliff.value * 3.3) / 65536
         try:
@@ -206,10 +206,13 @@ class state_machine():
 
 
 def cliff_function(dist):  #output true when cliff
-    if dist >= 20:
+    try:
+        if dist >= 20:
+            return True
+        else:
+            return False
+    except TypeError:
         return True
-    else:
-        return False
 
 
 def motor_test(mot1, mot2, drive_time, mag=60):
@@ -246,11 +249,9 @@ goomba = state_machine(start, motL, motR, encL, encR, lis3, lsm6)
 while True:  # actual main loop
     ble.start_advertising(advertisement)
     while not ble.connected:  # for testing while connected
-        #dists = [sonarL.distance, sonarF.distance, sonarR.distance]
-        #dists = [sonarL.distance]
+        dists = [sonarL.distance, sonarF.distance, sonarR.distance]
         encs = [encL.position, encR.position]
-        #print("Sonar distances: {:.2f}L {:.2f}F {:.2f}R (cm)".format(*dists))
-        #print(dists)
+        print("Sonar distances: {:.2f}L {:.2f}F {:.2f}R (cm)".format(*dists))
         print('Magnetometer: {0:10.2f}X {1:10.2f}Y {2:10.2f}Z uT'.format(*lis3.magnetic))
         print('Encoders: {0:10.2f}L {1:10.2f}R pulses'.format(*encs))
         print("Acceleration: {:.2f} {:.2f} {:.2f} m/s^2".format(*lsm6.acceleration))
@@ -265,20 +266,22 @@ while True:  # actual main loop
             test_q = mot_test0
             if (mot_test1 == "END"):
                 break
-
-            uart_test0 = input("Test UART? /n Y or N ")
-            uart_test1 = uart_test0.upper()
-            if test_q != "skip":
-                test_q = uart_test0
-            if (uart_test1 == "END"):
-                break
-            elif mot_test1 == "Y":
-                duration = float(input("How long? "))
-                motor_test(motL, motR, duration)
-            elif uart_test1 == "Y":
-                origins = [dists, encs, lis3.magnetic, lsm6.acceleration]
-                send_bytes(origins, rpi_write)
-                read_uart(8, rpi_write)
+            elif mot_test1 == "SKIP":
+                pass
+            else:
+                uart_test0 = input("Test UART? /n Y or N ")
+                uart_test1 = uart_test0.upper()
+                if test_q != "skip":
+                    test_q = uart_test0
+                if (uart_test1 == "END"):
+                    break
+                elif mot_test1 == "Y":
+                    duration = float(input("How long? "))
+                    motor_test(motL, motR, duration)
+                elif uart_test1 == "Y":
+                    origins = [dists, encs, lis3.magnetic, lsm6.acceleration]
+                    send_bytes(origins, rpi_write)
+                    read_uart(8, rpi_write)
 
     while ble.connected:
         if uart.in_waiting:
