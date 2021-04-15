@@ -2,7 +2,7 @@
 #
 # Written by Ryan Sands (sandsryanj@gmail.com)
 #   v0.80 25-Mar-2021 Drafting of functions for sensors and classes for state machine
-#   v0.90 26-Mar-2021 Initial version of state machine to handle 5 events. Needs to finish sensor handling
+#   v0.90 26-Mar-2021 Initial version of state machine to handle 5 events. ~Needs to finish sensor handling~
 #   v0.91 11-Apr-2021 Added sharp-gp2y0a21yk0f cliff sensor functionality and bluetooth
 
 import board
@@ -49,6 +49,7 @@ PIN_ENC_R0 = board.D12
 PIN_ENC_R1 = board.D13
 
 PIN_IR = board.A2  # MUST BE analog pin
+IR = AnalogIn(PIN_IR)
 
 encL = rotaryio.IncrementalEncoder(PIN_ENC_L0, PIN_ENC_L1)
 encR = rotaryio.IncrementalEncoder(PIN_ENC_R0, PIN_ENC_R1)
@@ -131,9 +132,9 @@ def vector_2_degrees(self, x, y):
     return angle
 
 
-def magnet_angle(self, packets):
+def magnet_angle(packets):
     magnet_x, magnet_y, _ = packets
-    return self.vector_2_degrees(magnet_x, magnet_y)
+    return vector_2_degrees(magnet_x, magnet_y)
 
 
 def distance(enc_change0, enc_change1):
@@ -173,17 +174,16 @@ class state_machine():
     def forward(self, speed):
         motor_level(speed, self.mot1)
         motor_level(speed, self.mot2)
-    
+
     def idle(self, ignite):
         motor_level(0, self.mot1)
         motor_level(0, self.mot2)
         if ignite is True:
             self.state = "LOCATE"
-    
-    def locate(self):  # for initialization
+
+    def locate(self):  # include indicator for cliff?
         global dists
-        thing = [[(0, 0, 0), (0, 0), (0, 0, 0), (0, 0, 0)], \
-            [(0, 0, 0), (0, 0), (0, 0, 0)]]
+        thing = [[(0, 0, 0), (0, 0), (0, 0, 0), (0, 0, 0)]]
         thing[0][0] = self.magnet.magnetic
         thing[0][1] = (self.encL.position, self.encR.position)
         thing[0][2] = self.accel.acceleration
@@ -205,17 +205,23 @@ class state_machine():
         else:
             print(direction, "is not a valid direction to turn.")
         
-    def get_cliff_dist(self, pin):  # in cm, good for ~9 to ~30
-        an_in = AnalogIn(pin)
-        volt = (an_in.value * 3.3) / 65536
-        return (volt ** -1.173) * 29.988
+    def cliff_dist(self, cliff):  # in cm, good for ~9 to ~30
+        volt = (cliff.value * 3.3) / 65536
+        try:
+            return (volt ** -1.173) * 29.988
+        except ZeroDivisionError:
+            print("The cliff sensor is giving bad readings.")
+            time.sleep(0.05)
 
 
-def cliff_function(dist):  #output true when cliff
-    if dist >= 20:
+def cliff_function(dist):  # output true when cliff
+    try:
+        if dist >= 20:
+            return True
+        else:
+            return False
+    except TypeError:
         return True
-    else:
-        return False
 
 
 def motor_test(mot1, mot2, drive_time, mag=60):
@@ -238,8 +244,7 @@ test_q = "Y"
 
 # Main loop
 vector_array = {}
-origins = [[(0, 0, 0), (0, 0), (0, 0, 0)], \
-    [(0, 0, 0), (0, 0), (0, 0, 0)]]
+origins = [[(0, 0, 0), (0, 0), (0, 0, 0), (0, 0, 0)]]
 i = 0
 start = "IDLE"
 s_threshhold = 30  # in cm
@@ -249,14 +254,17 @@ goomba = state_machine(start, motL, motR, encL, encR, lis3, lsm6)
 while True:  # actual main loop
     ble.start_advertising(advertisement)
     while not ble.connected:  # for testing while connected
-        #dists = [sonarL.distance, sonarF.distance, sonarR.distance]
+        dists = [sonarL.distance, sonarF.distance, sonarR.distance]
         #dists = [sonarL.distance]
         encs = [encL.position, encR.position]
-        #print("Sonar distances: {:.2f}L {:.2f}F {:.2f}R (cm)".format(*dists))
+        print("Sonar distances: {:.2f}L {:.2f}F {:.2f}R (cm)".format(*dists))
         #print(dists)
         print('Magnetometer: {0:10.2f}X {1:10.2f}Y {2:10.2f}Z uT'.format(*lis3.magnetic))
         print('Encoders: {0:10.2f}L {1:10.2f}R pulses'.format(*encs))
         print("Acceleration: {:.2f} {:.2f} {:.2f} m/s^2".format(*lsm6.acceleration))
+        cliff = goomba.cliff_dist(IR)
+        print("Cliff distance:", cliff, "cm")
+        print("Cliff?", cliff_function(cliff), "cm")  # TODO consolidate these functions
 
         time.sleep(print_time)
         if test_q != "skip":
@@ -277,8 +285,8 @@ while True:  # actual main loop
                 motor_test(motL, motR, duration)
             elif uart_test1 == "Y":
                 origins = [dists, encs, lis3.magnetic, lsm6.acceleration]
-                send_bytes(origins)
-                read_uart(8)
+                send_bytes(origins, rpi_write)
+                read_uart(8, rpi_write)
 
     while ble.connected:
         if testing:
@@ -298,13 +306,17 @@ while True:  # actual main loop
                         pass
                     else:
                         start_button = False
-                        
+
+        cliff = goomba.cliff_dist(IR)
+        dists = [sonarL.distance, sonarF.distance, sonarR.distance]
         if goomba.state == "IDLE":
             goomba.idle(start_button)
             start_button = False
+
         elif goomba.state == "LOCATE":
             origins[i] = goomba.locate()
             i += 1
+            
         elif goomba.state == "FORWARD":
             goomba.forward(60)
             if (sonarL.distance <= s_threshhold) and (sonarF.distance <= s_threshhold):
@@ -313,11 +325,11 @@ while True:  # actual main loop
                 goomba.go = "RIGHT"
             elif (sonarR.distance <= s_threshhold) and (sonarF.distance <= s_threshhold):
                 origins[i] = goomba.locate()
-                i += 1 
+                i += 1
                 goomba.go = "LEFT"
-            elif cliff_function() is True:
-                origins[i] = goomba.locate()
-                i += 1 
+            elif cliff_function(cliff) is True:
+                origins[i] = goomba.locate()  # TODO include cliff event in origin_data
+                i += 1
                 goomba.go = "RIGHT"
             elif start_button is True:
                 goomba.state = "IDLE"
@@ -325,7 +337,7 @@ while True:  # actual main loop
             
         elif goomba.state == "TURN":
             goomba.turn(goomba.go)
-            if (sonarF.distance >= s_threshhold) and (cliff_function() is False):
+            if (sonarF.distance >= s_threshhold) and (cliff_function(cliff) is False):
                 origins[i] = goomba.locate()
                 i += 1
                 goomba.state = "FORWARD"
@@ -337,5 +349,3 @@ while True:  # actual main loop
 # true or false input for cliffs
 # less than threshold value on any of the left front or right sonar
 # and taking some sort of reset button
-# how will we decide when to read and when to write between FnRF and RPI?
-# does reading by UART block program?
