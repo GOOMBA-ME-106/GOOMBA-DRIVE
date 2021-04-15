@@ -146,7 +146,7 @@ def read_uart(numbytes, rpi):
         try:
             data_string = struct.unpack("d", data)
             print(data_string)
-        except:
+        except Exception:
             print("No data found.")
 
 

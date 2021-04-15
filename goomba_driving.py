@@ -142,8 +142,8 @@ rpi_write = UART(TX, RX, baudrate=9600, timeout=1)
 
 
 def send_bytes(origin_data, rpi):
-    for count0, d_list in enumerate(origin_data):
-        for value in d_list:
+    for count0, d_list in enumerate(origin_data):  # grabs every list in origin_data list
+        for value in d_list:  # grabs every value in list
             rpi.write(bytes(struct.pack("d", float(value))))  # use struct.unpack to get float back
 
 
@@ -153,8 +153,8 @@ def read_uart(numbytes, rpi):
         try:
             data_string = struct.unpack("d", data)
             print(data_string)
-        except:
-            print("No data found.")
+        except Exception as e:
+            print("No data found. Error:\n", e)
 
 
 # States of state machine
@@ -180,10 +180,9 @@ class state_machine():
         if ignite is True:
             self.state = "LOCATE"
 
-    def locate(self):  # for initialization
+    def locate(self):  # include indicator for cliff?
         global dists
-        thing = [[(0, 0, 0), (0, 0), (0, 0, 0)], \
-            [(0, 0, 0), (0, 0), (0, 0, 0)]]
+        thing = [[(0, 0, 0), (0, 0), (0, 0, 0), (0, 0, 0)]]
         thing[0][0] = self.magnet.magnetic
         thing[0][1] = (self.encL.position, self.encR.position)
         thing[0][2] = self.accel.acceleration
@@ -214,11 +213,14 @@ class state_machine():
             time.sleep(0.05)
 
 
-def cliff_function(dist):  #output true when cliff
-    if dist >= 20:
+def cliff_function(dist):  # output true when cliff
+    try:
+        if dist >= 20:
+            return True
+        else:
+            return False
+    except TypeError:
         return True
-    else:
-        return False
 
 
 def motor_test(mot1, mot2, drive_time, mag=60):
@@ -241,8 +243,7 @@ test_q = "Y"
 
 # Main loop
 vector_array = {}
-origins = [[(0, 0, 0), (0, 0), (0, 0, 0)], \
-    [(0, 0, 0), (0, 0), (0, 0, 0)]]
+origins = [[(0, 0, 0), (0, 0), (0, 0, 0), (0, 0, 0)]]
 i = 0
 start = "IDLE"
 s_threshhold = 30  # in cm
@@ -310,9 +311,11 @@ while True:  # actual main loop
         if goomba.state == "IDLE":
             goomba.idle(start_button)
             start_button = False
+
         elif goomba.state == "LOCATE":
             origins[i] = goomba.locate()
             i += 1
+            
         elif goomba.state == "FORWARD":
             goomba.forward(60)
             if (sonarL.distance <= s_threshhold) and (sonarF.distance <= s_threshhold):
@@ -324,7 +327,7 @@ while True:  # actual main loop
                 i += 1 
                 goomba.go = "LEFT"
             elif cliff_function(cliff) is True:
-                origins[i] = goomba.locate()  # TODO include cliff event in origin data
+                origins[i] = goomba.locate()  # TODO include cliff event in origin_data
                 i += 1 
                 goomba.go = "RIGHT"
             elif start_button is True:
