@@ -31,9 +31,9 @@ from adafruit_bluefruit_connect.button_packet import ButtonPacket
 '''
  we have 7 digital pins, 6 analog pins explicitly - D13, D12, D11, D10, D9, D6, D5, D2
  Analog available A0, A1, A2, A3, A4, A5 just take out IW
- gives tentative total of 13 pins at our disposal, no I2C pins
- Sck, MO, MI pins can be used for general purpose IO (GPIO), but we use SPI
- so IR stuff goes to other board
+ Sck, MO, MI pins can be used for general purpose IO (GPIO)
+ SCL SDA should be free for GPIO, but gives pull up error
+ gives total of 16 pins at our disposal
 '''
 
 # sensor input pins
@@ -160,9 +160,10 @@ def read_uart(numbytes, rpi):
 # States of state machine
 class state_machine():
     go = None
+    start = "IDLE"
 
-    def __init__(self, initial_state, motL, motR, encL, encR, magneto, accel):
-        self.state = str(initial_state).upper()
+    def __init__(self,  motL, motR, encL, encR, magneto, accel):
+        self.state = self.start
         self.mot1 = motL
         self.mot2 = motR
         self.encL = encL
@@ -245,19 +246,19 @@ test_q = "Y"
 vector_array = {}
 origins = [[(0, 0, 0), (0, 0), (0, 0, 0), (0, 0, 0)]]
 i = 0
-start = "IDLE"
 s_threshhold = 30  # in cm
 start_button = None
 
-goomba = state_machine(start, motL, motR, encL, encR, lis3, lsm6)
+goomba = state_machine(motL, motR, encL, encR, lis3, lsm6)
 while True:  # actual main loop
     ble.start_advertising(advertisement)
     while not ble.connected:  # for testing while connected
-        dists = [sonarL.distance, sonarF.distance, sonarR.distance]
-        #dists = [sonarL.distance]
+        try:
+            dists = [sonarL.distance, sonarF.distance, sonarR.distance]
+            print("Sonar distances: {:.2f}L {:.2f}F {:.2f}R (cm)".format(*dists))
+        except Exception:
+            print("At least one sonar is not detected.")
         encs = [encL.position, encR.position]
-        print("Sonar distances: {:.2f}L {:.2f}F {:.2f}R (cm)".format(*dists))
-        #print(dists)
         print('Magnetometer: {0:10.2f}X {1:10.2f}Y {2:10.2f}Z uT'.format(*lis3.magnetic))
         print('Encoders: {0:10.2f}L {1:10.2f}R pulses'.format(*encs))
         print("Acceleration: {:.2f} {:.2f} {:.2f} m/s^2".format(*lsm6.acceleration))
