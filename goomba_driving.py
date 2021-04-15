@@ -101,32 +101,27 @@ def error(err_string):
 def motor_level(level, mot):  # input is range of percents, -100 to 100
     mot.throttle = float(level/100)
 
+
 # UART stuff for RPI
 rpi_write = UART(TX, RX, baudrate=9600, timeout=1)
 #rpi_read = UART(SCL, SDA, baudrate=9600)  # need pull up resistor for this?
 
 
-def send_bytes(origin_data):  # TODO choose how much and when to send data instead of just sending all of it
+def send_bytes(origin_data, rpi):
     for count0, d_list in enumerate(origin_data):
         for value in d_list:
-            rpi_write.write(bytes(struct.pack("d", float(value))))  # use struct.unpack to get float back
+            rpi.write(bytes(struct.pack("d", float(value))))  # use struct.unpack to get float back
 
 
-def read_uart(numbytes):
-    data = rpi_write.read(numbytes)  # change this if we get a second set of RX TX pins
+def read_uart(numbytes, rpi):
+    data = rpi.read(numbytes)
     if data is not None:
         try:
             data_string = struct.unpack("d", data)
             print(data_string)
-        except:
-            print("No data found.")
+        except Exception as e:
+            print("No data found. \nError message:", e)
 
-def read_uart(numbytes):
-    data = uart_rpi.read(numbytes)
-    if data is not None:
-        data_string = struct.unpack("d", data)
-        print(data_string, end="")
-# may want to use MISO pin as a chipselect pin for communication
 
 # functions for RPi to interpret data?
 def vector_2_degrees(self, x, y):
@@ -186,11 +181,13 @@ class state_machine():
             self.state = "LOCATE"
     
     def locate(self):  # for initialization
-        thing = [[(0, 0, 0), (0, 0), (0, 0, 0)], \
+        global dists
+        thing = [[(0, 0, 0), (0, 0), (0, 0, 0), (0, 0, 0)], \
             [(0, 0, 0), (0, 0), (0, 0, 0)]]
         thing[0][0] = self.magnet.magnetic
         thing[0][1] = (self.encL.position, self.encR.position)
         thing[0][2] = self.accel.acceleration
+        thing[0][3] = dists
         if self.state == "LOCATE":
             self.state = "FORWARD"
         else:
