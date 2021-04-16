@@ -183,7 +183,7 @@ class state_machine():
 
     def locate(self):  # include indicator for cliff?
         global dists
-        thing = [[(0, 0, 0), (0, 0), (0, 0, 0), (0, 0, 0)]]
+        thing = [(0, 0, 0), (0, 0), (0, 0, 0), (0, 0, 0)]
         thing[0][0] = self.magnet.magnetic
         thing[0][1] = (self.encL.position, self.encR.position)
         thing[0][2] = self.accel.acceleration
