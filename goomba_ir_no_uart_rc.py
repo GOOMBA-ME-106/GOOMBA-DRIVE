@@ -176,11 +176,15 @@ class state_machine():
 
     def locate(self):  # include indicator for cliff?
         global dists
-        thing = [[(0, 0, 0), (0, 0), (0, 0, 0), (0, 0, 0)]]
-        thing[0][0] = self.magnet.magnetic
-        thing[0][1] = (self.encL.position, self.encR.position)
-        thing[0][2] = self.accel.acceleration
-        thing[0][3] = dists
+        thing = [(0, 0, 0), (0, 0), (0, 0, 0), (0, 0, 0), (0)]
+        thing[0] = self.magnet.magnetic
+        thing[1] = (self.encL.position, self.encR.position)
+        thing[2] = self.accel.acceleration
+        thing[3] = dists
+        if self.cliff_det():  # gives binary indicator if there is a cliff
+            thing[4] = (1)
+        else:
+            thing[4] = (0)
         if self.state == "LOCATE":
             self.state = "FORWARD"
         else:
@@ -197,7 +201,7 @@ class state_machine():
             motor_level(-mag, motL)
         else:
             print(direction, "is not a valid direction to turn.")
-
+        
     def cliff_dist(self, cliff):  # in cm, good for ~9 to ~30
         volt = (cliff.value * 3.3) / 65536
         try:
@@ -205,16 +209,17 @@ class state_machine():
         except ZeroDivisionError:
             print("The cliff sensor is giving bad readings.")
             time.sleep(0.05)
-
-
-def cliff_function(dist):  #output true when cliff
-    try:
-        if dist >= 20:
+    
+    def cliff_det(self):
+        global IR
+        dist = self.cliff_dist(IR)
+        try:
+            if dist >= 20:
+                return True
+            else:
+                return False
+        except TypeError:
             return True
-        else:
-            return False
-    except TypeError:
-        return True
 
 
 def motor_test(mot1, mot2, drive_time, mag=60):
@@ -237,15 +242,10 @@ test_q = "Y"
 
 # Main loop
 vector_array = {}
-origins = [[(0, 0, 0), (0, 0), (0, 0, 0)], \
-    [(0, 0, 0), (0, 0), (0, 0, 0)]]
+origins = [[(0, 0, 0), (0, 0), (0, 0, 0), (0, 0, 0)]]
 i = 0
-
 s_threshhold = 30  # in cm
 start_button = None
-step = 5
-speed1 = 0
-speed2 = 0
 
 goomba = state_machine(motL, motR, encL, encR, lis3, lsm6)
 while True:  # actual main loop
@@ -262,31 +262,29 @@ while True:  # actual main loop
         print("Acceleration: {:.2f} {:.2f} {:.2f} m/s^2".format(*lsm6.acceleration))
         cliff = goomba.cliff_dist(IR)
         print("Cliff distance:", cliff, "cm")
-        print("Cliff?", cliff_function(cliff), "cm")
+        print("Cliff?", goomba.cliff_det(), "cm")
 
         time.sleep(print_time)
-        if test_q != "skip":
+        if test_q != "SKIP":
             mot_test0 = input("Test motors? /n Y or N ")
             mot_test1 = mot_test0.upper()
-            test_q = mot_test0
+            test_q = mot_test0.upper()
             if (mot_test1 == "END"):
                 break
-            elif mot_test1 == "SKIP":
-                pass
-            else:
-                uart_test0 = input("Test UART? /n Y or N ")
-                uart_test1 = uart_test0.upper()
-                if test_q != "skip":
-                    test_q = uart_test0
-                if (uart_test1 == "END"):
-                    break
-                elif mot_test1 == "Y":
-                    duration = float(input("How long? "))
-                    motor_test(motL, motR, duration)
-                elif uart_test1 == "Y":
-                    origins = [dists, encs, lis3.magnetic, lsm6.acceleration]
-                    send_bytes(origins, rpi_write)
-                    read_uart(8, rpi_write)
+
+            uart_test0 = input("Test UART? /n Y or N ")
+            uart_test1 = uart_test0.upper()
+            if uart_test1 != "SKIP":
+                test_q = uart_test0
+            if (uart_test1 == "END"):
+                break
+            elif mot_test1 == "Y":
+                duration = float(input("How long? "))
+                motor_test(motL, motR, duration)
+            elif uart_test1 == "Y":
+                origins = [dists, encs, lis3.magnetic, lsm6.acceleration]
+                send_bytes(origins, rpi_write)
+                read_uart(8, rpi_write)
 
     while ble.connected:
         if uart.in_waiting:
