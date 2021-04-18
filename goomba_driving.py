@@ -160,10 +160,10 @@ def new_vect(ang, dist):  # takes radians and cm for movement of goomba
 # States of state machine
 class state_machine():
     go = None
-    debug = True
+    start = "IDLE"
 
-    def __init__(self, initial_state, motL, motR, encL, encR, magneto, accel):
-        self.state = str(initial_state).upper()
+    def __init__(self,  motL, motR, encL, encR, magneto, accel):
+        self.state = self.start
         self.mot1 = motL
         self.mot2 = motR
         self.encL = encL
@@ -183,11 +183,15 @@ class state_machine():
 
     def locate(self):  # include indicator for cliff?
         global dists
-        thing = [[(0, 0, 0), (0, 0), (0, 0, 0), (0, 0, 0)]]
+        thing = [(0, 0, 0), (0, 0), (0, 0, 0), (0, 0, 0), (0)]
         thing[0] = self.magnet.magnetic
         thing[1] = (self.encL.position, self.encR.position)
         thing[2] = self.accel.acceleration
         thing[3] = dists
+        if self.cliff_det():  # gives binary indicator if there is a cliff
+            thing[4] = (1)
+        else:
+            thing[4] = (0)
         if self.state == "LOCATE":
             self.state = "FORWARD"
         else:
@@ -212,16 +216,17 @@ class state_machine():
         except ZeroDivisionError:
             print("The cliff sensor is giving bad readings.")
             time.sleep(0.05)
-
-
-def cliff_function(dist):  # output true when cliff
-    try:
-        if dist >= 20:
+    
+    def cliff_det(self):
+        global IR
+        dist = self.cliff_dist(IR)
+        try:
+            if dist >= 20:
+                return True
+            else:
+                return False
+        except TypeError:
             return True
-        else:
-            return False
-    except TypeError:
-        return True
 
 
 def motor_test(mot1, mot2, drive_time, mag=60):
@@ -246,37 +251,37 @@ test_q = "Y"
 vector_array = {}
 origins = [[(0, 0, 0), (0, 0), (0, 0, 0), (0, 0, 0)]]
 i = 0
-start = "IDLE"
 s_threshhold = 30  # in cm
 start_button = None
 
-goomba = state_machine(start, motL, motR, encL, encR, lis3, lsm6)
+goomba = state_machine(motL, motR, encL, encR, lis3, lsm6)
 while True:  # actual main loop
     ble.start_advertising(advertisement)
     while not ble.connected:  # for testing while connected
-        dists = [sonarL.distance, sonarF.distance, sonarR.distance]
-        #dists = [sonarL.distance]
+        try:
+            dists = [sonarL.distance, sonarF.distance, sonarR.distance]
+            print("Sonar distances: {:.2f}L {:.2f}F {:.2f}R (cm)".format(*dists))
+        except Exception:
+            print("At least one sonar is not detected.")
         encs = [encL.position, encR.position]
-        print("Sonar distances: {:.2f}L {:.2f}F {:.2f}R (cm)".format(*dists))
-        #print(dists)
         print('Magnetometer: {0:10.2f}X {1:10.2f}Y {2:10.2f}Z uT'.format(*lis3.magnetic))
         print('Encoders: {0:10.2f}L {1:10.2f}R pulses'.format(*encs))
         print("Acceleration: {:.2f} {:.2f} {:.2f} m/s^2".format(*lsm6.acceleration))
         cliff = goomba.cliff_dist(IR)
         print("Cliff distance:", cliff, "cm")
-        print("Cliff?", cliff_function(cliff), "cm")  # TODO consolidate these functions
+        print("Cliff?", goomba.cliff_det(), "cm")
 
         time.sleep(print_time)
-        if test_q != "skip":
+        if test_q != "SKIP":
             mot_test0 = input("Test motors? /n Y or N ")
             mot_test1 = mot_test0.upper()
-            test_q = mot_test0
+            test_q = mot_test0.upper()
             if (mot_test1 == "END"):
                 break
 
             uart_test0 = input("Test UART? /n Y or N ")
             uart_test1 = uart_test0.upper()
-            if test_q != "skip":
+            if uart_test1 != "SKIP":
                 test_q = uart_test0
             if (uart_test1 == "END"):
                 break
@@ -315,7 +320,6 @@ while True:  # actual main loop
         else:
             pass
 
-        cliff = goomba.cliff_dist(IR)
         dists = [sonarL.distance, sonarF.distance, sonarR.distance]
         if goomba.state == "IDLE":
             goomba.idle(start_button)
@@ -333,11 +337,11 @@ while True:  # actual main loop
                 goomba.go = "RIGHT"
             elif (sonarR.distance <= s_threshhold) and (sonarF.distance <= s_threshhold):
                 origins[i] = goomba.locate()
-                i += 1
+                i += 1 
                 goomba.go = "LEFT"
-            elif cliff_function(cliff) is True:
+            elif goomba.cliff_det() is True:
                 origins[i] = goomba.locate()  # TODO include cliff event in origin_data
-                i += 1
+                i += 1 
                 goomba.go = "RIGHT"
             elif start_button is True:
                 goomba.state = "IDLE"
@@ -345,7 +349,7 @@ while True:  # actual main loop
             
         elif goomba.state == "TURN":
             goomba.turn(goomba.go)
-            if (sonarF.distance >= s_threshhold) and (cliff_function(cliff) is False):
+            if (sonarF.distance >= s_threshhold) and (goomba.cliff_det() is False):
                 origins[i] = goomba.locate()
                 i += 1
                 goomba.state = "FORWARD"
