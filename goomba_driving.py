@@ -184,10 +184,10 @@ class state_machine():
     def locate(self):  # include indicator for cliff?
         global dists
         thing = [[(0, 0, 0), (0, 0), (0, 0, 0), (0, 0, 0)]]
-        thing[0][0] = self.magnet.magnetic
-        thing[0][1] = (self.encL.position, self.encR.position)
-        thing[0][2] = self.accel.acceleration
-        thing[0][3] = dists
+        thing[0] = self.magnet.magnetic
+        thing[1] = (self.encL.position, self.encR.position)
+        thing[2] = self.accel.acceleration
+        thing[3] = dists
         if self.state == "LOCATE":
             self.state = "FORWARD"
         else:
@@ -306,6 +306,14 @@ while True:  # actual main loop
                         pass
                     else:
                         start_button = False
+        if timer_time == None:
+            timer_set()
+        else:
+            pass
+        if timer_event() == EVENT_TIMER:
+            #send data
+        else:
+            pass
 
         cliff = goomba.cliff_dist(IR)
         dists = [sonarL.distance, sonarF.distance, sonarR.distance]
