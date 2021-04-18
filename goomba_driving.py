@@ -332,7 +332,7 @@ while True:  # actual main loop
                 i += 1 
                 goomba.go = "LEFT"
             elif goomba.cliff_det() is True:
-                origins[i] = goomba.locate()  # TODO include cliff event in origin_data
+                origins[i] = goomba.locate()
                 i += 1 
                 goomba.go = "RIGHT"
             elif start_button is True:
