@@ -94,6 +94,26 @@ UP = ButtonPacket.UP
 LEFT = ButtonPacket.LEFT
 RIGHT = ButtonPacket.RIGHT
 
+EVENT_NONE = 0
+EVENT_TIMER = 1
+DATA_SEND_INTERVAL = 0.3
+
+timer_time = none
+
+def timer_event():
+    global timer_time
+    
+    if (timer_time != None) and time.monotonic() >= timer_time:
+        timer_time = None
+        return EVENT_TIMER
+    else:
+        return EVENT_NONE
+        
+    
+def timer_set():
+    global timer_time
+    timer_time = time.monotonic() + DATA_SEND_INTERVAL
+
 
 def error(err_string):
     raise Exception(err_string)
@@ -316,7 +336,9 @@ while True:  # actual main loop
         else:
             pass
         if timer_event() == EVENT_TIMER:
-            #send data
+            origins = [dists, encs, lis3.magnetic, lsm6.acceleration]
+            send_bytes(origins, rpi_write)
+            read_uart(8, rpi_write)
         else:
             pass
 
