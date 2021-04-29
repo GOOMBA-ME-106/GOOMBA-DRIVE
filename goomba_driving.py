@@ -9,6 +9,7 @@
 import board
 from board import SCL, SDA, SCK, MOSI, MISO, RX, TX
 import pwmio
+import digitalio
 from analogio import AnalogIn
 import rotaryio
 import time
@@ -52,10 +53,12 @@ PIN_ENC_R1 = board.D5
 
 PIN_IR = board.A2  # MUST BE analog pin
 IR = AnalogIn(PIN_IR)
+PIN_RPI_IN = MISO
+RPI_CS = analogio.AnaloglIn(PIN_RPI_IN)
+
 
 encL = rotaryio.IncrementalEncoder(PIN_ENC_L0, PIN_ENC_L1)
 encR = rotaryio.IncrementalEncoder(PIN_ENC_R0, PIN_ENC_R1)
-
 
 sonarL = adafruit_hcsr04.HCSR04(trigger_pin=PIN_SON_L0, echo_pin=PIN_SON_L1)  # sonar dist in cm
 sonarF = adafruit_hcsr04.HCSR04(trigger_pin=PIN_SON_F0, echo_pin=PIN_SON_F1)
@@ -64,7 +67,6 @@ sonarR = adafruit_hcsr04.HCSR04(trigger_pin=PIN_SON_R0, echo_pin=PIN_SON_R1)
 i2c = board.I2C()
 lis3 = adafruit_lis3mdl.LIS3MDL(i2c)
 lsm6 = adafruit_lsm6ds.lsm6ds33.LSM6DS33(i2c)
-
 
 # output pins
 PIN_MOTL0 = board.A4
@@ -229,7 +231,7 @@ class state_machine():
         except TypeError:
             return True
 
-    def grab_sonar(self):
+    def grab_sonar(self):  # TODO get rid of the global variables to prevent issues
         global sonarF
         global sonarL
         global sonarR
@@ -242,12 +244,12 @@ class state_machine():
             distR = sonarR.distance
         except Exception:
             print("The right sonar is not detected.")
-            distR = sonarR.distance
+            distR = 0
         try:
             distF = sonarF.distance
         except Exception:
             print("The front sonar is not detected.")
-            distF = sonarF.distance
+            distF = 0
         
         return [distL, distF, distR]
 
@@ -274,7 +276,7 @@ test_q = "Y"
 vector_array = {}
 origins = [[(0, 0, 0), (0, 0), (0, 0, 0), (0, 0, 0)]]
 i = 0
-s_threshhold = 30  # in cm
+s_thold = 30  # in cm
 start_button = None
 
 goomba = state_machine(motL, motR, encL, encR, lis3, lsm6)
@@ -298,20 +300,25 @@ while True:  # actual main loop
             test_q = mot_test0.upper()
             if (mot_test1 == "END"):
                 break
+            if mot_test1 != "SKIP":
+                uart_test0 = input("Test UART? \nY or N ")
+                uart_test1 = uart_test0.upper()
+                if uart_test1 == "SKIP":
+                    test_q = uart_test1
+                if (uart_test1 == "END"):
+                    break
+                elif mot_test1 == "Y":
+                    duration = float(input("How long? "))
+                    motor_test(motL, motR, duration)
+                elif uart_test1 == "Y":
+                    origins = [dists, encs, lis3.magnetic, lsm6.acceleration]
+                    send_bytes(origins, rpi_write)
+                    read_uart(8, rpi_write)
 
-            uart_test0 = input("Test UART? \nY or N ")
-            uart_test1 = uart_test0.upper()
-            if uart_test1 == "SKIP":
-                test_q = uart_test1
-            if (uart_test1 == "END"):
-                break
-            elif mot_test1 == "Y":
-                duration = float(input("How long? "))
-                motor_test(motL, motR, duration)
-            elif uart_test1 == "Y":
-                origins = [dists, encs, lis3.magnetic, lsm6.acceleration]
-                send_bytes(origins, rpi_write)
-                read_uart(8, rpi_write)
+        if RPI_CS.value > idk:  # idea for signalling when to read from RPi
+            print("RPi sending data!")
+            bits = RPI_CS.value/256
+
 
     while ble.connected:
         if testing:
@@ -339,10 +346,10 @@ while True:  # actual main loop
             origins.append(goomba.locate())
         elif goomba.state == "FORWARD":
             goomba.forward(60)
-            if (sonarL.distance <= s_threshhold) and (sonarF.distance <= s_threshhold):
+            if (sonarL.distance <= s_thold) and (sonarF.distance <= s_thold):
                 origins.append(goomba.locate())
                 goomba.go = "RIGHT"
-            elif (sonarR.distance <= s_threshhold) and (sonarF.distance <= s_threshhold):
+            elif (sonarR.distance <= s_thold) and (sonarF.distance <= s_thold):
                 origins.append(goomba.locate())
                 goomba.go = "LEFT"
             elif goomba.cliff_det() is True:
@@ -354,7 +361,7 @@ while True:  # actual main loop
             
         elif goomba.state == "TURN":
             goomba.turn(goomba.go)
-            if (sonarF.distance >= s_threshhold) and (goomba.cliff_det() is False):
+            if (sonarF.distance >= s_thold) and (goomba.cliff_det() is False):
                 origins.append(goomba.locate())
                 goomba.state = "FORWARD"
             elif start_button is True:
