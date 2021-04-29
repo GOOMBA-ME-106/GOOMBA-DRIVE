@@ -37,17 +37,18 @@ from adafruit_bluefruit_connect.button_packet import ButtonPacket
 '''
 
 # sensor input pins
+# sensor input pins
 PIN_SON_L0 = board.D11
 PIN_SON_L1 = board.D10
 PIN_SON_F0 = board.D9
 PIN_SON_F1 = board.D6
-PIN_SON_R0 = board.D5
-PIN_SON_R1 = board.D2
+PIN_SON_R0 = board.D13
+PIN_SON_R1 = board.D12
 
 PIN_ENC_L0 = board.A0
 PIN_ENC_L1 = board.A1
-PIN_ENC_R0 = board.D12
-PIN_ENC_R1 = board.D13
+PIN_ENC_R0 = board.D2
+PIN_ENC_R1 = board.D5
 
 PIN_IR = board.A2  # MUST BE analog pin
 IR = AnalogIn(PIN_IR)
