@@ -12,7 +12,7 @@ class Window(QWidget):
         
         #self.setFixedHeight(200)
         #self.setFixedWidth(400)
-        self.setGeometry(2950,0, 400,300)
+        self.setGeometry(550,200, 400,300)
         #self.setStyleSheet('background-color:blue')
 
         stylesheet = (
