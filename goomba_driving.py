@@ -1,10 +1,11 @@
 # goomba_driving.py - ME 106 Project Code
-#   nRF52840 Feathersense microcontroller. no TriplerBaseBoard.
+# nRF52840 Feathersense microcontroller. no TriplerBaseBoard.
 #
 # Written by Ryan Sands (sandsryanj@gmail.com)
 #   v0.80 25-Mar-2021 Drafting of functions for sensors and classes for state machine
 #   v0.90 26-Mar-2021 Initial version of state machine to handle 5 events. ~Needs to finish sensor handling~
 #   v0.91 11-Apr-2021 Added sharp-gp2y0a21yk0f cliff sensor functionality and bluetooth
+#   v1.00 29-Apr-2021 QoL updates for testing, fixed data reording, final pin assignments
 
 import board
 from board import SCL, SDA, SCK, MOSI, MISO, RX, TX
@@ -98,6 +99,27 @@ UP = ButtonPacket.UP
 LEFT = ButtonPacket.LEFT
 RIGHT = ButtonPacket.RIGHT
 
+EVENT_NONE = 0
+EVENT_TIMER = 1
+DATA_SEND_INTERVAL = 0.3
+
+timer_time = None
+
+
+def timer_event():
+    global timer_time
+
+    if (timer_time != None) and time.monotonic() >= timer_time:
+        timer_time = None
+        return EVENT_TIMER
+    else:
+        return EVENT_NONE
+
+
+def timer_set():
+    global timer_time
+    timer_time = time.monotonic() + DATA_SEND_INTERVAL
+
 
 def error(err_string):
     raise Exception(err_string)
@@ -107,7 +129,29 @@ def motor_level(level, mot):  # input is range of percents, -100 to 100
     mot.throttle = float(level/100)
 
 
-def vector_2_degrees(x, y):  # we can prob move these over to the RPi
+# UART stuff for RPI
+rpi_write = UART(TX, RX, baudrate=9600, timeout=1)
+#rpi_read = UART(SCL, SDA, baudrate=9600)  # need pull up resistor for this?
+
+
+def send_bytes(origin_data, rpi):
+    for count0, d_list in enumerate(origin_data):
+        for value in d_list:
+            rpi.write(bytes(struct.pack("d", float(value))))  # use struct.unpack to get float back
+
+
+def read_uart(numbytes, rpi):
+    data = rpi.read(numbytes)
+    if data is not None:
+        try:
+            data_string = struct.unpack("d", data)
+            print(data_string)
+        except Exception as e:
+            print("No data found. \nError message:", e)
+
+
+# functions for RPi to interpret data?
+def vector_2_degrees(self, x, y):
     angle = degrees(atan2(y, x))
     if angle < 0:
         angle += 360
@@ -132,32 +176,11 @@ def angle(enc_change0, enc_change1, prior_ang=0):  # cross reference w/ magnetom
     return ang_rad
 
 
-def new_vect(ang, dist):  # takes radians and cm
+def new_vect(ang, dist):  # takes radians and cm for movement of goomba
     vect = []
     vect[0] = float(dist) * cos(ang)
     vect[1] = float(dist) * sin(ang)
     return vect
-
-
-# UART stuff for RPI
-rpi_write = UART(TX, RX, baudrate=9600, timeout=1)
-#rpi_read = UART(SCL, SDA, baudrate=9600)  # need pull up resistor for this?
-
-
-def send_bytes(origin_data, rpi):
-    for count0, d_list in enumerate(origin_data):  # grabs every list in origin_data list
-        for value in d_list:  # grabs every value in list
-            rpi.write(bytes(struct.pack("d", float(value))))  # use struct.unpack to get float back
-
-
-def read_uart(numbytes, rpi):
-    data = rpi.read(numbytes)
-    if data is not None:
-        try:
-            data_string = struct.unpack("d", data)
-            print(data_string)
-        except Exception as e:
-            print("No data found. Error:\n", e)
 
 
 # States of state machine
@@ -211,7 +234,7 @@ class state_machine():
             motor_level(-mag, motL)
         else:
             print(direction, "is not a valid direction to turn.")
-        
+
     def cliff_dist(self, cliff):  # in cm, good for ~9 to ~30
         volt = (cliff.value * 3.3) / 65536
         try:
@@ -219,7 +242,7 @@ class state_machine():
         except ZeroDivisionError:
             print("The cliff sensor is giving bad readings.")
             time.sleep(0.05)
-    
+
     def cliff_det(self):
         global IR
         dist = self.cliff_dist(IR)
@@ -330,20 +353,28 @@ while True:  # actual main loop
             if isinstance(packet, ButtonPacket):
                 if packet.pressed:
                     if packet.button == B1:
-                        start_button = True
+                        start_button = True  # may need to fix this?
                         print("Button 1 pressed! It was a reset?!")
                     elif packet.button == B2:
                         #some way to send origins in an organized manner?
                         print("Button 2 pressed! Data by UART WIP.")
                         pass
-                    start_button = False
-        
+
         dists = goomba.grab_sonar()
+
+        if timer_time == None:
+            timer_set()
+        if timer_event() == EVENT_TIMER:
+            origins = [dists, encs, lis3.magnetic, lsm6.acceleration]
+            send_bytes(origins, rpi_write)
+            read_uart(8, rpi_write)
+
         if goomba.state == "IDLE":
             goomba.idle(start_button)
             start_button = False
         elif goomba.state == "LOCATE":
             origins.append(goomba.locate())
+
         elif goomba.state == "FORWARD":
             goomba.forward(60)
             if (sonarL.distance <= s_thold) and (sonarF.distance <= s_thold):
@@ -358,7 +389,7 @@ while True:  # actual main loop
             elif start_button is True:
                 goomba.state = "IDLE"
                 start_button = False
-            
+
         elif goomba.state == "TURN":
             goomba.turn(goomba.go)
             if (sonarF.distance >= s_thold) and (goomba.cliff_det() is False):
