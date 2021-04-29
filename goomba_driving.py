@@ -199,7 +199,7 @@ class state_machine():
             self.state = "TURN"
         return thing
 
-    def turn(self, direction, mag=20):
+    def turn(self, direction, mag=70):
         direc = str(direction).upper()
         if direc == "LEFT":
             motor_level(mag, motL)
@@ -228,6 +228,28 @@ class state_machine():
                 return False
         except TypeError:
             return True
+
+    def grab_sonar(self):
+        global sonarF
+        global sonarL
+        global sonarR
+        try:
+            distL = sonarL.distance
+        except Exception:
+            print("The left sonar is not detected.")
+            distL = 0
+        try:
+            distR = sonarR.distance
+        except Exception:
+            print("The right sonar is not detected.")
+            distR = sonarR.distance
+        try:
+            distF = sonarF.distance
+        except Exception:
+            print("The front sonar is not detected.")
+            distF = sonarF.distance
+        
+        return [distL, distF, distR]
 
 
 def motor_test(mot1, mot2, drive_time, mag=60):
@@ -259,11 +281,8 @@ goomba = state_machine(motL, motR, encL, encR, lis3, lsm6)
 while True:  # actual main loop
     ble.start_advertising(advertisement)
     while not ble.connected:  # for testing while connected
-        try:
-            dists = [sonarL.distance, sonarF.distance, sonarR.distance]
-            print("Sonar distances: {:.2f}L {:.2f}F {:.2f}R (cm)".format(*dists))
-        except Exception:
-            print("At least one sonar is not detected.")
+        dists = goomba.grab_sonar()
+        print("Sonar distances: {:.2f}L {:.2f}F {:.2f}R (cm)".format(*dists))
         encs = [encL.position, encR.position]
         print('Magnetometer: {0:10.2f}X {1:10.2f}Y {2:10.2f}Z uT'.format(*lis3.magnetic))
         print('Encoders: {0:10.2f}L {1:10.2f}R pulses'.format(*encs))
@@ -274,16 +293,16 @@ while True:  # actual main loop
 
         time.sleep(print_time)
         if test_q != "SKIP":
-            mot_test0 = input("Test motors? /n Y or N ")
+            mot_test0 = input("Test motors? \nY or N ")
             mot_test1 = mot_test0.upper()
             test_q = mot_test0.upper()
             if (mot_test1 == "END"):
                 break
 
-            uart_test0 = input("Test UART? /n Y or N ")
+            uart_test0 = input("Test UART? \nY or N ")
             uart_test1 = uart_test0.upper()
-            if uart_test1 != "SKIP":
-                test_q = uart_test0
+            if uart_test1 == "SKIP":
+                test_q = uart_test1
             if (uart_test1 == "END"):
                 break
             elif mot_test1 == "Y":
@@ -310,31 +329,24 @@ while True:  # actual main loop
                         #some way to send origins in an organized manner?
                         print("Button 2 pressed! Data by UART WIP.")
                         pass
-                    else:
-                        start_button = False
-
-        dists = [sonarL.distance, sonarF.distance, sonarR.distance]
+                    start_button = False
+        
+        dists = goomba.grab_sonar()
         if goomba.state == "IDLE":
             goomba.idle(start_button)
             start_button = False
-
         elif goomba.state == "LOCATE":
-            origins[i] = goomba.locate()
-            i += 1
-            
+            origins.append(goomba.locate())
         elif goomba.state == "FORWARD":
             goomba.forward(60)
             if (sonarL.distance <= s_threshhold) and (sonarF.distance <= s_threshhold):
-                origins[i] = goomba.locate()
-                i += 1
+                origins.append(goomba.locate())
                 goomba.go = "RIGHT"
             elif (sonarR.distance <= s_threshhold) and (sonarF.distance <= s_threshhold):
-                origins[i] = goomba.locate()
-                i += 1 
+                origins.append(goomba.locate())
                 goomba.go = "LEFT"
             elif goomba.cliff_det() is True:
-                origins[i] = goomba.locate()
-                i += 1 
+                origins.append(goomba.locate())
                 goomba.go = "RIGHT"
             elif start_button is True:
                 goomba.state = "IDLE"
@@ -343,8 +355,7 @@ while True:  # actual main loop
         elif goomba.state == "TURN":
             goomba.turn(goomba.go)
             if (sonarF.distance >= s_threshhold) and (goomba.cliff_det() is False):
-                origins[i] = goomba.locate()
-                i += 1
+                origins.append(goomba.locate())
                 goomba.state = "FORWARD"
             elif start_button is True:
                 goomba.state = "IDLE"
