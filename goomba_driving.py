@@ -1,11 +1,12 @@
-# goomba_driving.py - ME 106 Project Code
+# goomba_driving.py - ME 106 GOOMBA Project Code
 # nRF52840 Feathersense microcontroller. no TriplerBaseBoard.
 #
-# Written by Ryan Sands (sandsryanj@gmail.com)
+# Written by Justin Ramos, Dylan Robinson, Ryan Sands (sandsryanj@gmail.com)
 #   v0.80 25-Mar-2021 Drafting of functions for sensors and classes for state machine
 #   v0.90 26-Mar-2021 Initial version of state machine to handle 5 events. ~Needs to finish sensor handling~
 #   v0.91 11-Apr-2021 Added sharp-gp2y0a21yk0f cliff sensor functionality and bluetooth
-#   v1.00 29-Apr-2021 QoL updates for testing, fixed data reording, final pin assignments
+#   v1.00 29-Apr-2021 QoL updates for testing, fixed data reording, final pin assignments, working state machine
+#   v1.01 29-Apr-2021 Prep for RPi
 
 import board
 from board import SCL, SDA, SCK, MOSI, MISO, RX, TX
@@ -20,8 +21,6 @@ import adafruit_lis3mdl  # magnetometer
 import adafruit_hcsr04  # sonar sensor
 import adafruit_lsm6ds.lsm6ds33  # acceleromter
 from adafruit_motor import motor
-
-from math import cos, sin, atan2, degrees
 
 from adafruit_ble import BLERadio  # for testing motors remotely
 from adafruit_ble.advertising.standard import ProvideServicesAdvertisement
@@ -55,7 +54,8 @@ PIN_ENC_R1 = board.D5
 PIN_IR = board.A2  # MUST BE analog pin
 IR = AnalogIn(PIN_IR)
 PIN_RPI_IN = MISO
-RPI_CS = analogio.AnaloglIn(PIN_RPI_IN)
+RPI_CS = digitalio.DigitalInOut(PIN_RPI_IN)
+RPI_CS.direction = digitalio.Direction.INPUT
 
 
 encL = rotaryio.IncrementalEncoder(PIN_ENC_L0, PIN_ENC_L1)
@@ -105,11 +105,34 @@ DATA_SEND_INTERVAL = 0.3
 
 timer_time = None
 
+# TODO assign states an integer value to send w/ locate and timer
+
+
+def error(err_string):
+    raise Exception(err_string)
+
+
+def motor_level(level, mot):  # input is range of percents, -100 to 100
+    mot.throttle = float(level/100)
+
+
+def motor_test(mot1, mot2, drive_time, mag=60):
+    drive = drive_time/2
+    motor_level(mag, mot1)
+    motor_level(mag, mot2)
+    time.sleep(drive)
+    motor_level(-mag, mot1)
+    motor_level(-mag, mot2)
+    time.sleep(drive)
+    motor_level(0, mot1)
+    motor_level(0, mot2)
+    time.sleep(0.1)
+
 
 def timer_event():
     global timer_time
 
-    if (timer_time != None) and time.monotonic() >= timer_time:
+    if (timer_time is not None) and time.monotonic() >= timer_time:
         timer_time = None
         return EVENT_TIMER
     else:
@@ -119,14 +142,6 @@ def timer_event():
 def timer_set():
     global timer_time
     timer_time = time.monotonic() + DATA_SEND_INTERVAL
-
-
-def error(err_string):
-    raise Exception(err_string)
-
-
-def motor_level(level, mot):  # input is range of percents, -100 to 100
-    mot.throttle = float(level/100)
 
 
 # UART stuff for RPI
@@ -148,39 +163,6 @@ def read_uart(numbytes, rpi):
             print(data_string)
         except Exception as e:
             print("No data found. \nError message:", e)
-
-
-# functions for RPi to interpret data?
-def vector_2_degrees(self, x, y):
-    angle = degrees(atan2(y, x))
-    if angle < 0:
-        angle += 360
-    return angle
-
-
-def magnet_angle(packets):
-    magnet_x, magnet_y, _ = packets
-    return vector_2_degrees(magnet_x, magnet_y)
-
-
-def distance(enc_change0, enc_change1):
-    enc_change = (enc_change0 + enc_change1)/2
-    dist = enc_change * constant
-    return dist
-
-
-def angle(enc_change0, enc_change1, prior_ang=0):  # cross reference w/ magnetometer?
-    enc_change = (enc_change0 + enc_change1)/2
-    ang = enc_change * constant
-    ang_rad = ang * (3.141592/180) + prior_ang
-    return ang_rad
-
-
-def new_vect(ang, dist):  # takes radians and cm for movement of goomba
-    vect = []
-    vect[0] = float(dist) * cos(ang)
-    vect[1] = float(dist) * sin(ang)
-    return vect
 
 
 # States of state machine
@@ -207,7 +189,7 @@ class state_machine():
         if ignite is True:
             self.state = "LOCATE"
 
-    def locate(self):  # include indicator for cliff?
+    def locate(self):  # TODO indicate state/event with data
         global dists
         thing = [(0, 0, 0), (0, 0), (0, 0, 0), (0, 0, 0), (0)]
         thing[0] = self.magnet.magnetic
@@ -224,7 +206,7 @@ class state_machine():
             self.state = "TURN"
         return thing
 
-    def turn(self, direction, mag=70):
+    def turn(self, direction, mag=50):
         direc = str(direction).upper()
         if direc == "LEFT":
             motor_level(mag, motL)
@@ -254,40 +236,24 @@ class state_machine():
         except TypeError:
             return True
 
-    def grab_sonar(self):  # TODO get rid of the global variables to prevent issues
-        global sonarF
-        global sonarL
-        global sonarR
+    def grab_sonar(self, sL, sF, sR):
         try:
-            distL = sonarL.distance
+            distL = sL.distance
         except Exception:
             print("The left sonar is not detected.")
             distL = 0
         try:
-            distR = sonarR.distance
+            distR = sR.distance
         except Exception:
             print("The right sonar is not detected.")
             distR = 0
         try:
-            distF = sonarF.distance
+            distF = sF.distance
         except Exception:
             print("The front sonar is not detected.")
             distF = 0
-        
+
         return [distL, distF, distR]
-
-
-def motor_test(mot1, mot2, drive_time, mag=60):
-    drive = drive_time/2
-    motor_level(mag, mot1)
-    motor_level(mag, mot2)
-    time.sleep(drive)
-    motor_level(-mag, mot1)
-    motor_level(-mag, mot2)
-    time.sleep(drive)
-    motor_level(0, mot1)
-    motor_level(0, mot2)
-    time.sleep(0.1)
 
 
 testing = True
@@ -306,7 +272,7 @@ goomba = state_machine(motL, motR, encL, encR, lis3, lsm6)
 while True:  # actual main loop
     ble.start_advertising(advertisement)
     while not ble.connected:  # for testing while connected
-        dists = goomba.grab_sonar()
+        dists = goomba.grab_sonar(sL=sonarL, sF=sonarF, sR=sonarR)
         print("Sonar distances: {:.2f}L {:.2f}F {:.2f}R (cm)".format(*dists))
         encs = [encL.position, encR.position]
         print('Magnetometer: {0:10.2f}X {1:10.2f}Y {2:10.2f}Z uT'.format(*lis3.magnetic))
@@ -334,13 +300,13 @@ while True:  # actual main loop
                     duration = float(input("How long? "))
                     motor_test(motL, motR, duration)
                 elif uart_test1 == "Y":
-                    origins = [dists, encs, lis3.magnetic, lsm6.acceleration]
+                    c_det = int(goomba.cliff_det())
+                    origins = [lis3.magnetic, encs, lsm6.acceleration, dists, (c_det)]
                     send_bytes(origins, rpi_write)
-                    read_uart(8, rpi_write)
 
-        if RPI_CS.value > idk:  # idea for signalling when to read from RPi
+        if RPI_CS.value is True:  # idea for signalling when to read from RPi
             print("RPi sending data!")
-            bits = RPI_CS.value/256
+            # receive data here
 
 
     while ble.connected:
@@ -356,18 +322,18 @@ while True:  # actual main loop
                         start_button = True  # may need to fix this?
                         print("Button 1 pressed! It was a reset?!")
                     elif packet.button == B2:
-                        #some way to send origins in an organized manner?
+                        # some way to send origins in an organized manner?
                         print("Button 2 pressed! Data by UART WIP.")
                         pass
 
-        dists = goomba.grab_sonar()
+        dists = goomba.grab_sonar(sL=sonarL, sF=sonarF, sR=sonarR)
 
-        if timer_time == None:
+        if timer_time is None:
             timer_set()
         if timer_event() == EVENT_TIMER:
-            origins = [dists, encs, lis3.magnetic, lsm6.acceleration]
+            c_det = int(goomba.cliff_det())
+            origins = [lis3.magnetic, encs, lsm6.acceleration, dists, (c_det)]
             send_bytes(origins, rpi_write)
-            read_uart(8, rpi_write)
 
         if goomba.state == "IDLE":
             goomba.idle(start_button)
