@@ -64,6 +64,7 @@ encR = rotaryio.IncrementalEncoder(PIN_ENC_R0, PIN_ENC_R1)
 sonarL = adafruit_hcsr04.HCSR04(trigger_pin=PIN_SON_L0, echo_pin=PIN_SON_L1)  # sonar dist in cm
 sonarF = adafruit_hcsr04.HCSR04(trigger_pin=PIN_SON_F0, echo_pin=PIN_SON_F1)
 sonarR = adafruit_hcsr04.HCSR04(trigger_pin=PIN_SON_R0, echo_pin=PIN_SON_R1)
+sonar = [sonarL, sonarF, sonarR]
 
 i2c = board.I2C()
 lis3 = adafruit_lis3mdl.LIS3MDL(i2c)
@@ -149,13 +150,13 @@ rpi_write = UART(TX, RX, baudrate=9600, timeout=1)
 #rpi_read = UART(SCL, SDA, baudrate=9600)  # need pull up resistor for this?
 
 
-def send_bytes(origin_data, rpi):
+def send_bytes(rpi, origin_data):
     for count0, d_list in enumerate(origin_data):
         for value in d_list:
             rpi.write(bytes(struct.pack("d", float(value))))  # use struct.unpack to get float back
 
 
-def read_uart(numbytes, rpi):
+def read_uart(rpi, numbytes=8):
     data = rpi.read(numbytes)
     if data is not None:
         try:
@@ -163,6 +164,8 @@ def read_uart(numbytes, rpi):
             print(data_string)
         except Exception as e:
             print("No data found. \nError message:", e)
+            data_string = None
+    return data_string
 
 
 # States of state machine
@@ -170,7 +173,7 @@ class state_machine():
     go = None
     start = "IDLE"
 
-    def __init__(self,  motL, motR, encL, encR, magneto, accel):
+    def __init__(self,  motL, motR, encL, encR, magneto, accel, *sonar):
         self.state = self.start
         self.mot1 = motL
         self.mot2 = motR
@@ -178,8 +181,11 @@ class state_machine():
         self.encR = encR
         self.magnet = magneto
         self.accel = accel
+        self.sL = sonar[0]
+        self.sF = sonar[1]
+        self.sR = sonar[2]
 
-    def forward(self, speed):
+    def forward(self, speed=70):
         motor_level(speed, self.mot1)
         motor_level(speed, self.mot2)
 
@@ -236,19 +242,19 @@ class state_machine():
         except TypeError:
             return True
 
-    def grab_sonar(self, sL, sF, sR):
+    def grab_sonar(self):
         try:
-            distL = sL.distance
+            distL = self.sL.distance
         except Exception:
             print("The left sonar is not detected.")
             distL = 0
         try:
-            distR = sR.distance
+            distR = self.sR.distance
         except Exception:
             print("The right sonar is not detected.")
             distR = 0
         try:
-            distF = sF.distance
+            distF = self.sF.distance
         except Exception:
             print("The front sonar is not detected.")
             distF = 0
@@ -257,22 +263,21 @@ class state_machine():
 
 
 testing = True
-last = time.monotonic()
 print_time = .2
 test_q = "Y"
 
 # Main loop
-vector_array = {}
-origins = [[(0, 0, 0), (0, 0), (0, 0, 0), (0, 0, 0)]]
+last = time.monotonic()
+origins = [[(0, 0, 0), (0, 0), (0, 0, 0), (0, 0, 0), (0)]]
 i = 0
 s_thold = 30  # in cm
 start_button = None
 
-goomba = state_machine(motL, motR, encL, encR, lis3, lsm6)
+goomba = state_machine(motL, motR, encL, encR, lis3, lsm6, sonar)
 while True:  # actual main loop
     ble.start_advertising(advertisement)
     while not ble.connected:  # for testing while connected
-        dists = goomba.grab_sonar(sL=sonarL, sF=sonarF, sR=sonarR)
+        dists = goomba.grab_sonar()
         print("Sonar distances: {:.2f}L {:.2f}F {:.2f}R (cm)".format(*dists))
         encs = [encL.position, encR.position]
         print('Magnetometer: {0:10.2f}X {1:10.2f}Y {2:10.2f}Z uT'.format(*lis3.magnetic))
@@ -302,11 +307,12 @@ while True:  # actual main loop
                 elif uart_test1 == "Y":
                     c_det = int(goomba.cliff_det())
                     origins = [lis3.magnetic, encs, lsm6.acceleration, dists, (c_det)]
-                    send_bytes(origins, rpi_write)
+                    send_bytes(rpi_write, origins)
 
         if RPI_CS.value is True:  # idea for signalling when to read from RPi
             print("RPi sending data!")
-            # receive data here
+            data = read_uart(rpi_write)
+            print(data)
 
 
     while ble.connected:
@@ -326,14 +332,14 @@ while True:  # actual main loop
                         print("Button 2 pressed! Data by UART WIP.")
                         pass
 
-        dists = goomba.grab_sonar(sL=sonarL, sF=sonarF, sR=sonarR)
+        dists = goomba.grab_sonar()
 
         if timer_time is None:
             timer_set()
         if timer_event() == EVENT_TIMER:
             c_det = int(goomba.cliff_det())
             origins = [lis3.magnetic, encs, lsm6.acceleration, dists, (c_det)]
-            send_bytes(origins, rpi_write)
+            send_bytes(rpi_write, origins)
 
         if goomba.state == "IDLE":
             goomba.idle(start_button)
@@ -342,7 +348,7 @@ while True:  # actual main loop
             origins.append(goomba.locate())
 
         elif goomba.state == "FORWARD":
-            goomba.forward(60)
+            goomba.forward()
             if (sonarL.distance <= s_thold) and (sonarF.distance <= s_thold):
                 origins.append(goomba.locate())
                 goomba.go = "RIGHT"
