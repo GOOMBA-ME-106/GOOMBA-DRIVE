@@ -270,7 +270,7 @@ test_q = "Y"
 
 # Main loop
 last = time.monotonic()
-origins = [[(0, 0, 0), (0, 0), (0, 0, 0), (0, 0, 0), (0)]]
+origins = [[(0, 0, 0), (0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0)]]
 i = 0
 s_thold = 30  # in cm
 start_button = None
