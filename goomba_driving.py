@@ -199,17 +199,19 @@ class state_machine():
         global dists
         thing = [(0, 0, 0), (0, 0), (0, 0, 0), (0, 0, 0), (0)]
         thing[0] = self.magnet.magnetic
-        thing[1] = (self.encL.position, self.encR.position)
+        thing[1] = (self.encL.position, self.encR.position, 0)
         thing[2] = self.accel.acceleration
         thing[3] = dists
         if self.cliff_det():  # gives binary indicator if there is a cliff
-            thing[4] = (1)
+            thing[4] = (1, 0, 0)
         else:
-            thing[4] = (0)
+            thing[4] = (0, 0, 0)
         if self.state == "LOCATE":
             self.state = "FORWARD"
+            thing[4][1] = 1
         else:
             self.state = "TURN"
+            thing[4][1] = 2
         return thing
 
     def turn(self, direction, mag=50):
@@ -306,7 +308,7 @@ while True:  # actual main loop
                     motor_test(motL, motR, duration)
                 elif uart_test1 == "Y":
                     c_det = int(goomba.cliff_det())
-                    origins = [lis3.magnetic, encs, lsm6.acceleration, dists, (c_det)]
+                    origins = [lis3.magnetic, encs, lsm6.acceleration, dists, (c_det,0,1)]
                     send_bytes(rpi_write, origins)
 
         if RPI_CS.value is True:  # idea for signalling when to read from RPi
@@ -338,7 +340,7 @@ while True:  # actual main loop
             timer_set()
         if timer_event() == EVENT_TIMER:
             c_det = int(goomba.cliff_det())
-            origins = [lis3.magnetic, encs, lsm6.acceleration, dists, (c_det)]
+            origins = [lis3.magnetic, encs, lsm6.acceleration, dists, (c_det,0,1)]
             send_bytes(rpi_write, origins)
 
         if goomba.state == "IDLE":
