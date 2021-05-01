@@ -5,7 +5,7 @@
 #   v0.80 29-Apr-2021 Drafting of functions to interpret data and comm to nRF,
 #                     next step is to implement GUI
 
-import gpiozero
+import gpiozero  # for rpi gpio?
 import time
 
 import serial
@@ -13,9 +13,12 @@ import struct
 
 from math import cos, sin, atan2, degrees
 
+nRF = serial.Serial("/dev/ttyS0", 9600, timeout=0.3)
+
 
 def error(err_string):
     raise Exception(err_string)
+
 
 # functions for RPi to interpret data?
 def vector_2_degrees(self, x, y):
@@ -50,3 +53,27 @@ def new_vect(ang, dist):  # takes radians and cm for movement of goomba
     return vect
 
 
+def read_uart(rpi, numbytes=64):
+    data = rpi.read(numbytes)
+    data_string = None
+    er = None
+    if data is not None:
+        try:
+            data_string = struct.unpack("d", data)
+        except Exception as e:
+            print("No data found. \nError message:", e)
+            er = e
+    return (data_string, er)
+
+
+last_time = time.monotonic()
+blink_time = .1
+while True:
+    if time.monotonic() - last_time > blink_time:
+        last_time = time.monotonic()
+        received_data, er = read_uart(nRF)
+        print(received_data)
+        if received_data is None:
+            nRF.write(bytes(str(er), "utf-8"))  # transmit data serially
+        else:
+            pass
