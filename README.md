@@ -27,5 +27,5 @@ The needed libraries from there are:
 PyQt5:
 - [pyqt-tools](https://pypi.org/project/pyqt5-tools/ "install pyqt tools for the designer")
 - [PyQt5](https://pypi.org/project/PyQt5/ "necessary for Raspberry Pi to desiplay GUI")
-- 
+
 **note**: on Raspberry Pi OS 5.10, the background-color will not work propoerly and will need to be [fixed](https://www.google.com/ "temp link")
