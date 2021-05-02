@@ -3,10 +3,14 @@
 # pyqt5-tools designer
 # pyuic5 -x your_ui.ui -o your_output.py
 
-from PyQt5 import QtCore, QtGui, QtWidgets 
+from PyQt5 import QtCore, QtWidgets 
 from PyQt5.QtGui import QIcon, QFont
 from PyQt5.QtCore import QThread, pyqtSignal
 from PyQt5.QtWidgets import QMessageBox
+
+import time
+import serial
+import struct
 
 
 class Ui_Goomba(object):
@@ -26,13 +30,19 @@ class Ui_Goomba(object):
 
     last = False
     pwr_state = ""
+    encL_now = 0
+    encR_now = 0
+    encL_prev = 0
+    encR_prev = 0
+    ang_prev = 0
+    ang_now = 0
 
     def setupUi(self, Goomba):
         Goomba.setObjectName("Goomba")
-        Goomba.resize(600, 450)
+        Goomba.resize(739, 550)
         Goomba.setMinimumSize(QtCore.QSize(600, 450))
         Goomba.setMaximumSize(QtCore.QSize(1920, 1080))
-        font = QtGui.QFont()
+        font = QFont()
         font.setFamily("Nirmala UI")
         font.setPointSize(12)
         font.setItalic(True)
@@ -40,20 +50,20 @@ class Ui_Goomba(object):
         Goomba.setFont(font)
         Goomba.setWindowTitle("Goomba_GUI")
         Goomba.setStyleSheet("QWidget {background-color:rgba(52, 73, 94,1.0)}\n"
-"QLabel {\n"
-"color:rgb(236, 240, 241);\n"
-"}")
+        "QLabel {\n"
+        "color:rgb(236, 240, 241);\n"
+        "}")
         self.horizontalLayout_3 = QtWidgets.QHBoxLayout(Goomba)
         self.horizontalLayout_3.setObjectName("horizontalLayout_3")
         self.verticalLayout = QtWidgets.QVBoxLayout()
         self.verticalLayout.setObjectName("verticalLayout")
+        spacerItem = QtWidgets.QSpacerItem(20, 40, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
+        self.verticalLayout.addItem(spacerItem)
         self.verticalLayout_4 = QtWidgets.QVBoxLayout()
         self.verticalLayout_4.setObjectName("verticalLayout_4")
-        spacerItem = QtWidgets.QSpacerItem(20, 40, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
-        self.verticalLayout_4.addItem(spacerItem)
         self.label_2 = QtWidgets.QLabel(Goomba)
         self.label_2.setMinimumSize(QtCore.QSize(0, 0))
-        font = QtGui.QFont()
+        font = QFont()
         font.setFamily("Nirmala UI")
         font.setPointSize(16)
         font.setBold(True)
@@ -101,42 +111,42 @@ class Ui_Goomba(object):
         self.line_8.setObjectName("line_8")
         self.gridLayout.addWidget(self.line_8, 1, 0, 1, 1)
         self.label_3 = QtWidgets.QLabel(Goomba)
-        font = QtGui.QFont()
+        font = QFont()
         font.setFamily("Nirmala UI")
         font.setPointSize(12)
         self.label_3.setFont(font)
         self.label_3.setObjectName("label_3")
         self.gridLayout.addWidget(self.label_3, 0, 0, 1, 1, QtCore.Qt.AlignHCenter)
         self.label_8 = QtWidgets.QLabel(Goomba)
-        font = QtGui.QFont()
+        font = QFont()
         font.setFamily("Nirmala UI")
         font.setPointSize(12)
         self.label_8.setFont(font)
         self.label_8.setObjectName("label_8")
         self.gridLayout.addWidget(self.label_8, 2, 4, 1, 1, QtCore.Qt.AlignHCenter)
         self.label_7 = QtWidgets.QLabel(Goomba)
-        font = QtGui.QFont()
+        font = QFont()
         font.setFamily("Nirmala UI")
         font.setPointSize(12)
         self.label_7.setFont(font)
         self.label_7.setObjectName("label_7")
         self.gridLayout.addWidget(self.label_7, 2, 2, 1, 1, QtCore.Qt.AlignHCenter)
         self.label_6 = QtWidgets.QLabel(Goomba)
-        font = QtGui.QFont()
+        font = QFont()
         font.setFamily("Nirmala UI")
         font.setPointSize(12)
         self.label_6.setFont(font)
         self.label_6.setObjectName("label_6")
         self.gridLayout.addWidget(self.label_6, 2, 0, 1, 1, QtCore.Qt.AlignHCenter)
         self.label_5 = QtWidgets.QLabel(Goomba)
-        font = QtGui.QFont()
+        font = QFont()
         font.setFamily("Nirmala UI")
         font.setPointSize(12)
         self.label_5.setFont(font)
         self.label_5.setObjectName("label_5")
         self.gridLayout.addWidget(self.label_5, 0, 4, 1, 1, QtCore.Qt.AlignHCenter)
         self.label_4 = QtWidgets.QLabel(Goomba)
-        font = QtGui.QFont()
+        font = QFont()
         font.setFamily("Nirmala UI")
         font.setPointSize(12)
         self.label_4.setFont(font)
@@ -161,7 +171,7 @@ class Ui_Goomba(object):
         self.verticalLayout_4.addLayout(self.horizontalLayout)
         self.verticalLayout.addLayout(self.verticalLayout_4)
         self.line_2 = QtWidgets.QFrame(Goomba)
-        font = QtGui.QFont()
+        font = QFont()
         font.setPointSize(12)
         font.setBold(False)
         font.setWeight(50)
@@ -176,7 +186,7 @@ class Ui_Goomba(object):
         spacerItem1 = QtWidgets.QSpacerItem(20, 40, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
         self.verticalLayout_5.addItem(spacerItem1)
         self.label_9 = QtWidgets.QLabel(Goomba)
-        font = QtGui.QFont()
+        font = QFont()
         font.setFamily("Nirmala UI")
         font.setPointSize(16)
         font.setBold(True)
@@ -202,7 +212,7 @@ class Ui_Goomba(object):
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.label_10.sizePolicy().hasHeightForWidth())
         self.label_10.setSizePolicy(sizePolicy)
-        font = QtGui.QFont()
+        font = QFont()
         font.setFamily("Nirmala UI")
         font.setPointSize(12)
         self.label_10.setFont(font)
@@ -218,7 +228,7 @@ class Ui_Goomba(object):
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.label_11.sizePolicy().hasHeightForWidth())
         self.label_11.setSizePolicy(sizePolicy)
-        font = QtGui.QFont()
+        font = QFont()
         font.setFamily("Nirmala UI")
         font.setPointSize(12)
         self.label_11.setFont(font)
@@ -236,9 +246,47 @@ class Ui_Goomba(object):
         self.verticalLayout.addWidget(self.line_3)
         spacerItem2 = QtWidgets.QSpacerItem(20, 40, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
         self.verticalLayout.addItem(spacerItem2)
+        self.label_18 = QtWidgets.QLabel(Goomba)
+        font = QFont()
+        font.setPointSize(16)
+        font.setBold(True)
+        font.setWeight(75)
+        self.label_18.setFont(font)
+        self.label_18.setObjectName("label_18")
+        self.verticalLayout.addWidget(self.label_18, 0, QtCore.Qt.AlignHCenter|QtCore.Qt.AlignBottom)
+        self.line_19 = QtWidgets.QFrame(Goomba)
+        self.line_19.setFrameShape(QtWidgets.QFrame.HLine)
+        self.line_19.setFrameShadow(QtWidgets.QFrame.Sunken)
+        self.line_19.setObjectName("line_19")
+        self.verticalLayout.addWidget(self.line_19)
+        self.horizontalLayout_5 = QtWidgets.QHBoxLayout()
+        self.horizontalLayout_5.setObjectName("horizontalLayout_5")
+        self.label_17 = QtWidgets.QLabel(Goomba)
+        font = QFont()
+        font.setFamily("Nirmala UI")
+        font.setPointSize(12)
+        self.label_17.setFont(font)
+        self.label_17.setObjectName("label_17")
+        self.horizontalLayout_5.addWidget(self.label_17, 0, QtCore.Qt.AlignRight)
+        self.label_16 = QtWidgets.QLabel(Goomba)
+        font = QFont()
+        font.setFamily("Nirmala UI")
+        font.setPointSize(12)
+        self.label_16.setFont(font)
+        self.label_16.setObjectName("label_16")
+        self.horizontalLayout_5.addWidget(self.label_16)
+        self.verticalLayout.addLayout(self.horizontalLayout_5)
+        self.line_18 = QtWidgets.QFrame(Goomba)
+        self.line_18.setLineWidth(12)
+        self.line_18.setFrameShape(QtWidgets.QFrame.HLine)
+        self.line_18.setFrameShadow(QtWidgets.QFrame.Sunken)
+        self.line_18.setObjectName("line_18")
+        self.verticalLayout.addWidget(self.line_18)
+        spacerItem3 = QtWidgets.QSpacerItem(20, 40, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
+        self.verticalLayout.addItem(spacerItem3)
         self.label = QtWidgets.QLabel(Goomba)
         self.label.setMaximumSize(QtCore.QSize(16777215, 40))
-        font = QtGui.QFont()
+        font = QFont()
         font.setFamily("Nirmala UI")
         font.setPointSize(16)
         font.setBold(True)
@@ -255,16 +303,22 @@ class Ui_Goomba(object):
         self.horizontalLayout_4.setObjectName("horizontalLayout_4")
         self.label_12 = QtWidgets.QLabel(Goomba)
         self.label_12.setMaximumSize(QtCore.QSize(16777215, 40))
-        font = QtGui.QFont()
+        font = QFont()
         font.setFamily("Nirmala UI")
         font.setPointSize(12)
         self.label_12.setFont(font)
         self.label_12.setObjectName("label_12")
         self.horizontalLayout_4.addWidget(self.label_12, 0, QtCore.Qt.AlignRight)
         self.label_15 = QtWidgets.QLabel(Goomba)
+        font = QFont()
+        font.setFamily("Nirmala UI")
+        font.setPointSize(12)
+        self.label_15.setFont(font)
         self.label_15.setObjectName("label_15")
         self.horizontalLayout_4.addWidget(self.label_15)
         self.verticalLayout.addLayout(self.horizontalLayout_4)
+        spacerItem4 = QtWidgets.QSpacerItem(20, 40, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
+        self.verticalLayout.addItem(spacerItem4)
         self.horizontalLayout_3.addLayout(self.verticalLayout)
         self.line = QtWidgets.QFrame(Goomba)
         self.line.setLineWidth(10)
@@ -280,7 +334,7 @@ class Ui_Goomba(object):
         self.verticalLayout_6.setObjectName("verticalLayout_6")
         self.label_13 = QtWidgets.QLabel(Goomba)
         self.label_13.setMaximumSize(QtCore.QSize(16777215, 25))
-        font = QtGui.QFont()
+        font = QFont()
         font.setFamily("Nirmala UI")
         font.setPointSize(16)
         font.setBold(True)
@@ -296,7 +350,7 @@ class Ui_Goomba(object):
         self.listWidget.setSizePolicy(sizePolicy)
         self.listWidget.setMinimumSize(QtCore.QSize(200, 200))
         self.listWidget.setMaximumSize(QtCore.QSize(0, 0))
-        font = QtGui.QFont()
+        font = QFont()
         font.setPointSize(12)
         self.listWidget.setFont(font)
         self.listWidget.setStyleSheet("color:rgb(236, 240, 241);\n"
@@ -314,7 +368,7 @@ class Ui_Goomba(object):
         self.listWidget.addItem(item)
         self.verticalLayout_6.addWidget(self.listWidget, 0, QtCore.Qt.AlignHCenter|QtCore.Qt.AlignVCenter)
         self.buttonBox = QtWidgets.QDialogButtonBox(Goomba)
-        font = QtGui.QFont()
+        font = QFont()
         font.setFamily("Nirmala UI")
         self.buttonBox.setFont(font)
         self.buttonBox.setStyleSheet("color:rgb(236, 240, 241)")
@@ -329,8 +383,8 @@ class Ui_Goomba(object):
         self.verticalLayout_6.addWidget(self.line_4)
         self.horizontalLayout_2.addLayout(self.verticalLayout_6)
         self.verticalLayout_2.addLayout(self.horizontalLayout_2)
-        spacerItem3 = QtWidgets.QSpacerItem(20, 40, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
-        self.verticalLayout_2.addItem(spacerItem3)
+        spacerItem5 = QtWidgets.QSpacerItem(20, 40, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
+        self.verticalLayout_2.addItem(spacerItem5)
         self.pwr = QtWidgets.QPushButton(Goomba)
         sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
         sizePolicy.setHorizontalStretch(2)
@@ -341,7 +395,7 @@ class Ui_Goomba(object):
         self.pwr.setMaximumSize(QtCore.QSize(75, 75))
         self.pwr.setSizeIncrement(QtCore.QSize(2, 2))
         self.pwr.setBaseSize(QtCore.QSize(50, 50))
-        font = QtGui.QFont()
+        font = QFont()
         font.setFamily("Nirmala UI")
         self.pwr.setFont(font)
         self.pwr.setStyleSheet(self.pwr_style)
@@ -352,23 +406,43 @@ class Ui_Goomba(object):
         self.verticalLayout_2.addWidget(self.pwr, 0, QtCore.Qt.AlignHCenter)
         self.label_14 = QtWidgets.QLabel(Goomba)
         self.label_14.setMaximumSize(QtCore.QSize(16777215, 30))
-        font = QtGui.QFont()
+        font = QFont()
         font.setFamily("Nirmala UI")
         self.label_14.setFont(font)
         self.label_14.setObjectName("label_14")
         self.verticalLayout_2.addWidget(self.label_14, 0, QtCore.Qt.AlignHCenter|QtCore.Qt.AlignTop)
-        spacerItem4 = QtWidgets.QSpacerItem(20, 40, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
-        self.verticalLayout_2.addItem(spacerItem4)
+        spacerItem6 = QtWidgets.QSpacerItem(20, 40, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
+        self.verticalLayout_2.addItem(spacerItem6)
         self.horizontalLayout_3.addLayout(self.verticalLayout_2)
 
         self.retranslateUi(Goomba)
+
+        
+
+        self.retranslateUi(Goomba)
         QtCore.QMetaObject.connectSlotsByName(Goomba)
+
+        self.reader = ReadThread()
+        self.reader.start()
+        self.reader.update_progress.connect(self.sensor2label)
+
         self.pwr.clicked.connect(self.toggle)
+
+    def send_state(self):  # called when widget does something
+        self.sender = SendThread()
+        self.sender.start()  # executes run() in workerthread
+        self.sender.update_progress.connect(self.evt_update_progress)
+        #self.worker.finished.connect(self.evt_finished)  # signal to communicate between threads
+        #self.worker.worker_complete.connect(self.evt_finished)  # can now pass values with end
+
+    def evt_finished(self, nut):
+        # do stuff on signal that process is done
+        QMessageBox.information(self, "Done:\n{} {}".format(nut, 2))  # recall string stuff
 
     def toggle(self):  # on pwr button click this is called
         if self.last is False:
             self.label_14.setText("Running")
-            pwr_style = self.run
+            pwr_style = self.run  # TODO integrate with sender class
             self.pwr_state = True  # gives go signal to bot
         elif self.last is True:
             self.label_14.setText("Paused")
@@ -378,19 +452,54 @@ class Ui_Goomba(object):
         self.pwr.setStyleSheet(pwr_style)
         return self.pwr_state
     
-    def background_process(self):  # called when widget does something
-        self.worker = WorkerThread()  
-        self.worker.start()  # executes run() in workerthread
-        #self.worker.finished.connect(self.evt_finished)  # signal to communicate between threads
-        self.worker.worker_complete.connect(self.evt_finished)  # can now pass values with end
-        self.worker.update_progress.connect(self.evt_update_progress)
-    
-    def evt_finished(self, nut):
-        # do stuff on signal that process is done
-        QMessageBox.information(self, "Done:\n{} {}".format(nut, 2)) # recall string stuff
+    def sensor2label(self, vals):  # called when we receive a signal from other process
+        start = 999
+        end = 666
+        if int(vals[0]) == start:
+            # start assigning text
+            mang = self.magnet_angle(vals[1], vals[2], vals[3])
+            self.label_12.setText(str(mang))
 
-    def evt_upgrade_progress(self, val):  # called when we receive a signal from other process
-        self.eatmyass.setText(val)
+            self.encL_now, self.encR_now = [vals[4], vals[5]]
+            encL_change = self.encL_now - self.encL_prev
+            encR_change = self.encR_now - self.encR_prev
+            self.encL_prev = self. encL_now
+            self.encR_prev = self. encR_now
+            if int(vals[13]) == 2: 
+                #bot is turning, angle according to encoders. may want to add additional label for this
+                self.label_12.setText(str(self.turn_angle(encL_change, encR_change)))
+            elif int(vals[13]) == 1:
+                #bot is forward
+                self.label_17.setText(str(self.distance(encL_change, encR_change)))
+
+
+
+        else:
+            # go through list until i find start and end values
+            e = vals.index(float(end)) # find where it ends
+            raise Exception("Start of data found at "+str(e)+" index. Make a function to auto-repair.")
+
+
+    def vector_2_degrees(self, x, y):
+        angle = degrees(atan2(y, x))
+        if angle < 0:
+            angle += 360
+        return angle
+
+    def magnet_angle(self, packets):
+        magnet_x, magnet_y, _ = packets
+        return self.vector_2_degrees(magnet_x, magnet_y)
+
+    def distance(self, enc_change0, enc_change1):
+        enc_change = (enc_change0 + enc_change1)/2
+        dist = enc_change * constant
+        return dist
+    
+    def turn_angle(self, enc_change0, enc_change1, prior_ang=0):  # cross reference w/ magnetometer?
+        enc_change = (enc_change0 + enc_change1)/2
+        ang = enc_change * constant
+        ang_rad = ang * (3.141592/180) + prior_ang
+        return ang_rad
 
     def retranslateUi(self, Goomba):
         _translate = QtCore.QCoreApplication.translate
@@ -409,6 +518,9 @@ class Ui_Goomba(object):
         self.label_15.setText(_translate("Goomba", "Degrees"))
         self.label_13.setText(_translate("Goomba", "State"))
         self.label_14.setText(_translate("Goomba", "Ignition"))
+        self.label_18.setText(_translate("Goomba", "Distance"))
+        self.label_17.setText(_translate("Goomba", "123"))
+        self.label_16.setText(_translate("Goomba", "Meters"))
         __sortingEnabled = self.listWidget.isSortingEnabled()
         self.listWidget.setSortingEnabled(False)
         item = self.listWidget.item(0)
@@ -424,20 +536,75 @@ class Ui_Goomba(object):
         self.listWidget.setSortingEnabled(__sortingEnabled)
         self.pwr.setText(_translate("Goomba", ""))
 
-
-class WorkerThread(QThread):
-    update_progress = pyqtSignal(int) # need to define what kind of signal we want to send
+# for reference of data sent
+origins = [(0, 12.0, 2.3), (3, 254.1, 0), (5, 6, 7), (8, 9, 10), (1, 2, 3)]
+class ReadThread(QThread):  # try to see if i can run multiple threads at once if one has a loop going
+    update_progress = pyqtSignal(list)  # need to define what kind of signal we want to send
     worker_complete = pyqtSignal(list)
+    nRF = serial.Serial("/dev/ttyS0", 15000, timeout=0.3)
+
     def run(self):
+        while True:
+            data = []
+            for i in range(17): # range 17 for starting and stopping numbs?
+                received, er = self.read_uart()
+                data.append(received[0])
+            if len(data) > 2:  # if i get more than the start and end bit, transmit data
+                self.update_progress.emit(data)
+
+    def read_uart(self, numbytes=8):
+        data = self.nRF.read(numbytes)
+        data_string = None
+        er = None
+        if data is not None:
+            try:
+                data_string = struct.unpack("d", data)
+            except Exception as e:
+                print("No data found. \nError message:", e)
+                er = e
+        return (data_string, er)
+          # print(data_string) gives (123.0,) as out, how to interpret?
+
+
+class sendThread(QThread):  # try to see if i can run multiple threads at once if one has a loop going
+    update_progress = pyqtSignal(list)  # need to define what kind of signal we want to send
+    sender_complete = pyqtSignal(int)
+    nRF = serial.Serial("/dev/ttyS0", 15000, timeout=0.3)
+
+    def run(self):
+        self.update_progress.emit(data)
+
+    def run_reference(self):  # why does this method go when worker.start() is called?
         # running our process
         # note can't call method in separate class
         # this thread has a finished signal we can catch in main class
         self.update_progress.emit(123)
         for x in range(12):
             self.update_progress.emit(x)
-        self.worker_complete.emit([(1,0,1.1),(1,2,3)])  # emitted at same time as finish signal
+            time.sleep(0.1)
+        self.worker_complete.emit([(1 ,0, 1.1),(1, 2, 3)])  # emitted at same time as finish signal
         # this is where we get each piece of data and send in an ordered manner to gui
 
+    def send_bytes(rpi, origin_data):
+        rpi.write(struct.pack("d", 999))
+        for count0, d_list in enumerate(origin_data):
+            for value in d_list:
+                rpi.write(struct.pack("d", value))  # use struct.unpack to get float back
+                print(struct.pack("d", value))
+        rpi.write(struct.pack("d", 666))
+
+    def read_uart(self, numbytes=8):
+        data = self.nRF.read(numbytes)
+        data_string = None
+        er = None
+        if data is not None:
+            try:
+                data_string = struct.unpack("d", data)
+            except Exception as e:
+                print("No data found. \nError message:", e)
+                er = e
+        return (data_string, er)
+          # print(data_string) gives (123.0,) as out, how to interpret?
 
 
 if __name__ == "__main__":

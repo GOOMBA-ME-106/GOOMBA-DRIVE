@@ -5,10 +5,10 @@
 #   v0.80 29-Apr-2021 Drafting of functions to interpret data and comm to nRF,
 #                     next step is to implement GUI
 
-#import gpiozero
+import gpiozero
 import time
 
-#import serial
+import serial
 import struct
 
 from math import cos, sin, atan2, degrees
@@ -19,15 +19,6 @@ from goomba_panel import Ui_Goomba  # PyQt file to run GUI
 from PyQt5 import QtCore, QtGui, QtWidgets 
 from PyQt5.QtGui import QIcon, QFont
 from PyQt5.QtCore import QThread
-
-
-
-class WorkerThread(QThread):
-    def run(self):
-        # running our process
-
-
-
 
 
 def error(err_string):
@@ -81,18 +72,13 @@ def read_uart(rpi, numbytes=8):
             er = e
     return (data_string, er)
 
-class goombaUI(QtGui.QMainWindow, Ui_Goomba):
-    def __init__(self):
-        super().__init__()
-    
-
 
 # launch GUI
 app = QtWidgets.QApplication(sys.argv)
 goomba = QtWidgets.QWidget()
 ui = Ui_Goomba()
 ui.setupUi(goomba)
-goomba.show()
+goomba.show()  # TODO include distance traveled in GUI
 
 
 last_time = time.monotonic()

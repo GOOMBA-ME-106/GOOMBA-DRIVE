@@ -15,30 +15,18 @@ PIN_RPI_IN = MISO
 RPI_CS = digitalio.DigitalInOut(PIN_RPI_IN)
 RPI_CS.direction = digitalio.Direction.INPUT
 
+
 def send_bytes(rpi, origin_data):
     rpi.write(struct.pack("d", 999))
-    #time.sleep(0.10)
     for count0, d_list in enumerate(origin_data):
         for value in d_list:
             rpi.write(struct.pack("d", value))  # use struct.unpack to get float back
-            print(struct.pack("d", value))
-            #time.sleep(0.01)
-            #rpi.write(struct.pack("d", 1.11))
     rpi.write(struct.pack("d", 666))
+
 
 # UART stuff for RPI
 rpi_write = UART(TX, RX, baudrate=15000)
-#rpi_read = UART(SCL, SDA, baudrate=9600)  # need pull up resistor for this?
-'''
-def send_bitties(rpi, d_list):
-    rpi.write(struct.pack("d", 999))
-    for d_tuple in d_list:
-        #for value in d_tuple:  # this somehow broke after prior testing, idk how to fix
-        rpi.write(struct.pack("d", d_tuple[0]))
-        rpi.write(struct.pack("d", d_tuple[1]))
-        rpi.write(struct.pack("d", d_tuple[2]))   # brute force loop
-    rpi.write(struct.pack("d", 666))
-'''
+
 
 def read_uart(rpi, numbytes=16):
     data = rpi.read(numbytes)
@@ -51,6 +39,7 @@ def read_uart(rpi, numbytes=16):
             print("No data found. \nError message:", e)
     return data_string
 
+
 blink_time = 1
 last_time = time.monotonic()
 origins = [(0, 12.0, 2.3), (3, 254.1, 0), (5, 6, 7), (8, 9, 10), (1, 2, 3)]
@@ -59,7 +48,6 @@ while True:
     if time.monotonic() - last_time > blink_time:
         last_time = time.monotonic()
         send_bytes(rpi_write, origins)
-        #rpi_write.write(struct.pack("d", 999))
         data = rpi_write.read(8)
         print(data)
         if data is not None:

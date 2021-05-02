@@ -197,7 +197,7 @@ class state_machine():
 
     def locate(self):  # TODO indicate state/event with data
         global dists
-        thing = [(0, 0, 0), (0, 0), (0, 0, 0), (0, 0, 0), (0)]
+        thing = [(0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0), (0)]
         thing[0] = self.magnet.magnetic
         thing[1] = (self.encL.position, self.encR.position, 0)
         thing[2] = self.accel.acceleration
