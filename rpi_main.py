@@ -21,6 +21,42 @@ from PyQt5.QtGui import QIcon, QFont
 from PyQt5.QtCore import QThread
 
 
+from gpiozero import Button
+import time
+import serial
+
+import RPi.GPIO as GPIO
+import sys
+
+sp = serial.Serial (<path to serial>)   
+sp.baudrate = 9600                   
+
+data = sp.read(10)      # 10 characters            
+sp.write(data)          # echo all 10 characters back
+
+CLK = 18
+MOSI = 23
+
+def setupSpiPins(mosiPin):
+    ''' Set all pins as an output except MOSI (Master Output, Slave Input)'''
+    pass     
+
+def readAdc(channel, mosiPin):
+    if (channel < 0) or (channel > 7):
+        print "Invalid ADC Channel number, must be between [0,7]"
+        return -1
+
+button = Button(2)
+
+while True:
+    if button.is_pressed:
+        print("Pressed")
+    else:
+        print("Released")
+    sleep(1)
+
+sp.close()
+
 def error(err_string):
     raise Exception(err_string)
 
