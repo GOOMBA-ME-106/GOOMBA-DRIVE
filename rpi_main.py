@@ -5,18 +5,34 @@
 #   v0.80 29-Apr-2021 Drafting of functions to interpret data and comm to nRF,
 #                     next step is to implement GUI
 
-import gpiozero
+#import gpiozero
 import time
 
-import serial
+#import serial
 import struct
 
 from math import cos, sin, atan2, degrees
 
-nRF = serial.Serial("/dev/ttyS0", 15000, timeout=0.3)
+import sys
+from goomba_panel import Ui_Goomba  # PyQt file to run GUI
+
+from PyQt5 import QtCore, QtGui, QtWidgets 
+from PyQt5.QtGui import QIcon, QFont
+from PyQt5.QtCore import QThread
+
+
+
+class WorkerThread(QThread):
+    def run(self):
+        # running our process
+
+
+
+
 
 def error(err_string):
     raise Exception(err_string)
+
 
 # functions for RPi to interpret data?
 def vector_2_degrees(self, x, y):
@@ -50,6 +66,9 @@ def new_vect(ang, dist):  # takes radians and cm for movement of goomba
     vect[1] = float(dist) * sin(ang)
     return vect
 
+
+nRF = serial.Serial("/dev/ttyS0", 15000, timeout=0.3)
+
 def read_uart(rpi, numbytes=8):
     data = rpi.read(numbytes)
     data_string = None
@@ -62,17 +81,36 @@ def read_uart(rpi, numbytes=8):
             er = e
     return (data_string, er)
 
-print("start")
+class goombaUI(QtGui.QMainWindow, Ui_Goomba):
+    def __init__(self):
+        super().__init__()
+    
+
+
+# launch GUI
+app = QtWidgets.QApplication(sys.argv)
+goomba = QtWidgets.QWidget()
+ui = Ui_Goomba()
+ui.setupUi(goomba)
+goomba.show()
+
+
 last_time = time.monotonic()
 blink_time = .1
 while True:
     if time.monotonic() - last_time > blink_time:
         last_time = time.monotonic()
         received_data, er = read_uart(nRF)
-
-        print(received_data)                   #print received data
         if received_data is None:
-            nRF.write(bytes(str(er), "utf-8"))                #transmit data serially 
+            nRF.write(bytes(str(er), "utf-8"))  # transmit data serially 
         else:
             pass
+    if ui.pwr_state:  # this is does not work while gui running. has to be in GUI class
+            print("on")
+    else:
+        '''
+        if goomba.pwr_state:  
+            print("on")'''
+        pass
 
+    sys.exit(app.exec())  # once i close window, this exits the program

@@ -322,6 +322,7 @@ while True:  # actual main loop
             if time.monotonic() - last > print_time:
                 print(goomba.state)
                 last = time.monotonic()
+        if 
         if uart.in_waiting:
             packet = Packet.from_stream(uart)
             if isinstance(packet, ButtonPacket):
@@ -333,6 +334,10 @@ while True:  # actual main loop
                         # some way to send origins in an organized manner?
                         print("Button 2 pressed! Data by UART WIP.")
                         pass
+                    elif packet.button == B3:
+                        # some way to send origins in an organized manner?
+                        print("Button 3 pressed! Toggled print statements.")
+                        testing = not testing
 
         dists = goomba.grab_sonar()
 
