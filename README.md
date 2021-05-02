@@ -15,6 +15,7 @@ There are two DC brushed motors to control the two wheels. They are driven by tw
 
 ## Libraries
 Needed libraries for CircuitPython can be found [here](https://learn.adafruit.com/adafruit-feather-sense/feather-sense-circuitpython-libraries "Feather Sense CircuitPython Libraries")
+
 The needed libraries from there are:
 - adafruit_lis3mdl
 - adafruit_hcsr04
@@ -22,3 +23,9 @@ The needed libraries from there are:
 - adafruit_motor 
 - adafruit_ble
 - adafruit_bluefruit_connect
+
+PyQt5:
+- [pyqt-tools](https://pypi.org/project/pyqt5-tools/ "install pyqt tools for the designer")
+- [PyQt5](https://pypi.org/project/PyQt5/ "necessary for Raspberry Pi to desiplay GUI")
+
+**note**: on Raspberry Pi OS 5.10, the background-color will not work propoerly and will need to be [fixed](https://www.google.com/ "temp link")
