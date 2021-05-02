@@ -6,6 +6,7 @@
 from PyQt5 import QtCore, QtGui, QtWidgets 
 from PyQt5.QtGui import QIcon, QFont
 from PyQt5.QtCore import QThread, pyqtSignal
+from PyQt5.QtWidgets import QMessageBox
 
 
 class Ui_Goomba(object):
@@ -380,14 +381,16 @@ class Ui_Goomba(object):
     def background_process(self):  # called when widget does something
         self.worker = WorkerThread()  
         self.worker.start()  # executes run() in workerthread
-        self.worker.finished.connect(self.evt_finished)  # signal to communicate between threads
+        #self.worker.finished.connect(self.evt_finished)  # signal to communicate between threads
+        self.worker.worker_complete.connect(self.evt_finished)  # can now pass values with end
         self.worker.update_progress.connect(self.evt_update_progress)
     
-    def evt_finished(self):
+    def evt_finished(self, nut):
         # do stuff on signal that process is done
+        QMessageBox.information(self, "Done:\n{} {}".format(nut, 2)) # recall string stuff
 
-    def evt_upgrade_progress(self):  # called when we receive a signal from other process
-        self.
+    def evt_upgrade_progress(self, val):  # called when we receive a signal from other process
+        self.eatmyass.setText(val)
 
     def retranslateUi(self, Goomba):
         _translate = QtCore.QCoreApplication.translate
@@ -424,11 +427,15 @@ class Ui_Goomba(object):
 
 class WorkerThread(QThread):
     update_progress = pyqtSignal(int) # need to define what kind of signal we want to send
+    worker_complete = pyqtSignal(list)
     def run(self):
         # running our process
         # note can't call method in separate class
         # this thread has a finished signal we can catch in main class
-        self.update_progress.emit([(1,0),(1,2)])
+        self.update_progress.emit(123)
+        for x in range(12):
+            self.update_progress.emit(x)
+        self.worker_complete.emit([(1,0,1.1),(1,2,3)])  # emitted at same time as finish signal
         # this is where we get each piece of data and send in an ordered manner to gui
 
 

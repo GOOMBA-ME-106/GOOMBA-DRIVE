@@ -322,7 +322,8 @@ while True:  # actual main loop
             if time.monotonic() - last > print_time:
                 print(goomba.state)
                 last = time.monotonic()
-        if 
+        if RPI_CS is True:
+            rpi_in = read_uart(rpi_write)
         if uart.in_waiting:
             packet = Packet.from_stream(uart)
             if isinstance(packet, ButtonPacket):
