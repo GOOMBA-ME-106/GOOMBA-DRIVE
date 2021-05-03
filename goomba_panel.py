@@ -22,6 +22,7 @@ class Ui_Goomba(object):
     gray_blue = "color:rgba(101,128,156,156)"  #65809C
     red = "color:rgba(201,74,50,201)"  #C94A32
     text = "color:rgb(236, 240, 241)"
+    green = "color:rgba(107,179,89,70)"  #6BB359
 
     pwr_style = "QPushButton {background-color:rgb(26, 188, 156); color:rgb(236, 240, 241)}"
     run = "QPushButton {background-color:rgb(46, 204, 113); color:rgb(236, 240, 241)}"
@@ -435,9 +436,9 @@ class Ui_Goomba(object):
         #self.worker.finished.connect(self.evt_finished)  # signal to communicate between threads
         #self.worker.worker_complete.connect(self.evt_finished)  # can now pass values with end
 
-    def evt_finished(self, nut):
+    def error_alert(self, nut):
         # do stuff on signal that process is done
-        QMessageBox.information(self, "Done:\n{} {}".format(nut, 2))  # recall string stuff
+        QMessageBox.information(self, "Uh oh, error:\n" + nut )
 
     def toggle(self):  # on pwr button click this is called
         if self.last is False:
@@ -455,6 +456,10 @@ class Ui_Goomba(object):
     def sensor2label(self, vals):  # called when we receive a signal from other process
         start = 999
         end = 666
+        LOCATE = 0
+        FORWARD = 1
+        TURN = 2
+        TEST = 3
         if int(vals[0]) == start:
             # start assigning text
             mang = self.magnet_angle(vals[1], vals[2], vals[3])
@@ -465,20 +470,41 @@ class Ui_Goomba(object):
             encR_change = self.encR_now - self.encR_prev
             self.encL_prev = self. encL_now
             self.encR_prev = self. encR_now
-            if int(vals[13]) == 2: 
+            if int(vals[14]) == TURN: 
                 #bot is turning, angle according to encoders. may want to add additional label for this
                 self.label_12.setText(str(self.turn_angle(encL_change, encR_change)))
-            elif int(vals[13]) == 1:
+            elif int(vals[14]) == FORWARD:
                 #bot is forward
                 self.label_17.setText(str(self.distance(encL_change, encR_change)))
+            elif int(vals[15]) == TEST:
+                self.label_14.setText("UART Test successful!")
 
+            x, y, z = (vals[7], vals[8], vals[9])
+            #if x > (9.81 * 0.75): # TODO eventually store and sort data based on the accleromter data
+            
+            sonars = [vals[10], vals[11], vals[12]]
+            self.label_6.setText(str(sonars[0]))
+            self.label_7.setText(str(sonars[1]))
+            self.label_8.setText(str(sonars[2]))
 
-
+            self.label_10.setText(str(vals[13])+" cm")
+            if (vals[13] > 20):
+                self.label_11.setText("True")
+                self.label_11.setStyleSheet(self.red)
+            elif vals[13] < 0:
+                self.label_11.setText("Bad reading")
+                self.label_11.setStyleSheet(self.light_brown)
+                self.error_alert("Bad reading")
+            else:
+                self.label_11.setText("False")
+                self.label_11.setStyleSheet(self.red)
+            
         else:
             # go through list until i find start and end values
             e = vals.index(float(end)) # find where it ends
-            raise Exception("Start of data found at "+str(e)+" index. Make a function to auto-repair.")
-
+            self.label_9.setText("Start data out of sync. Check UART connections.")
+            time.sleep(0.1)
+            #raise Exception("Start of data found at "+str(e)+" index. Make a function to auto-repair.")
 
     def vector_2_degrees(self, x, y):
         angle = degrees(atan2(y, x))
@@ -546,7 +572,7 @@ class ReadThread(QThread):  # try to see if i can run multiple threads at once i
     def run(self):
         while True:
             data = []
-            for i in range(17): # range 17 for starting and stopping numbs?
+            for i in range(18): # range 17 for starting and stopping numbs?
                 received, er = self.read_uart()
                 data.append(received[0])
             if len(data) > 2:  # if i get more than the start and end bit, transmit data
@@ -572,7 +598,7 @@ class sendThread(QThread):  # try to see if i can run multiple threads at once i
     nRF = serial.Serial("/dev/ttyS0", 15000, timeout=0.3)
 
     def run(self):
-        self.update_progress.emit(data)
+        self.update_progress.emit(data)  # TODO take button presh to send state change to nRF
 
     def run_reference(self):  # why does this method go when worker.start() is called?
         # running our process
@@ -593,18 +619,6 @@ class sendThread(QThread):  # try to see if i can run multiple threads at once i
                 print(struct.pack("d", value))
         rpi.write(struct.pack("d", 666))
 
-    def read_uart(self, numbytes=8):
-        data = self.nRF.read(numbytes)
-        data_string = None
-        er = None
-        if data is not None:
-            try:
-                data_string = struct.unpack("d", data)
-            except Exception as e:
-                print("No data found. \nError message:", e)
-                er = e
-        return (data_string, er)
-          # print(data_string) gives (123.0,) as out, how to interpret?
 
 
 if __name__ == "__main__":

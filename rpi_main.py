@@ -1,11 +1,13 @@
 # rpi_main.py - ME 106 GOOMBA Project Code
 # Raspeberry Pi
 #
-# Written by Ryan Sands (sandsryanj@gmail.com)
+# Written by Dylan Robinson and Ryan Sands (sandsryanj@gmail.com)
 #   v0.80 29-Apr-2021 Drafting of functions to interpret data and comm to nRF,
 #                     next step is to implement GUI
 
 import gpiozero
+from gpiozero import Button
+import RPi.GPIO as GPIO
 import time
 
 import serial
@@ -20,81 +22,19 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtGui import QIcon, QFont
 from PyQt5.QtCore import QThread
 
+nRF = serial.Serial("/dev/ttyS0", 15000, timeout=0.3)
 
-from gpiozero import Button
-import time
-import serial
-
-import RPi.GPIO as GPIO
-import sys
-
-sp = serial.Serial (<path to serial>)   
-sp.baudrate = 9600                   
-
-data = sp.read(10)      # 10 characters            
-sp.write(data)          # echo all 10 characters back
-
-CLK = 18
-MOSI = 23
-
-def setupSpiPins(mosiPin):
-    ''' Set all pins as an output except MOSI (Master Output, Slave Input)'''
-    pass     
-
-def readAdc(channel, mosiPin):
-    if (channel < 0) or (channel > 7):
-        print "Invalid ADC Channel number, must be between [0,7]"
-        return -1
-
-button = Button(2)
-
-while True:
-    if button.is_pressed:
-        print("Pressed")
-    else:
-        print("Released")
-    sleep(1)
-
-sp.close()
 
 def error(err_string):
     raise Exception(err_string)
 
-
-# functions for RPi to interpret data?
-def vector_2_degrees(self, x, y):
-    angle = degrees(atan2(y, x))
-    if angle < 0:
-        angle += 360
-    return angle
-
-
-def magnet_angle(packets):
-    magnet_x, magnet_y, _ = packets
-    return vector_2_degrees(magnet_x, magnet_y)
-
-
-def distance(enc_change0, enc_change1):
-    enc_change = (enc_change0 + enc_change1)/2
-    dist = enc_change * constant
-    return dist
-
-
-def angle(enc_change0, enc_change1, prior_ang=0):  # cross reference w/ magnetometer?
-    enc_change = (enc_change0 + enc_change1)/2
-    ang = enc_change * constant
-    ang_rad = ang * (3.141592/180) + prior_ang
-    return ang_rad
-
-
+# interpret data functions moved to goomba_panel
 def new_vect(ang, dist):  # takes radians and cm for movement of goomba
     vect = []
     vect[0] = float(dist) * cos(ang)
     vect[1] = float(dist) * sin(ang)
     return vect
 
-
-nRF = serial.Serial("/dev/ttyS0", 15000, timeout=0.3)
 
 def read_uart(rpi, numbytes=8):
     data = rpi.read(numbytes)
@@ -114,8 +54,33 @@ app = QtWidgets.QApplication(sys.argv)
 goomba = QtWidgets.QWidget()
 ui = Ui_Goomba()
 ui.setupUi(goomba)
-goomba.show()  # TODO include distance traveled in GUI
+goomba.show()  # TODO properly implement goomba_panel working version
 
+
+CLK = 18
+MOSI = 23
+
+def setupSpiPins(mosiPin):
+    ''' Set all pins as an output except MOSI (Master Output, Slave Input)'''
+    pass     
+
+
+def readAdc(channel, mosiPin):
+    if (channel < 0) or (channel > 7):
+        print "Invalid ADC Channel number, must be between [0,7]"
+        return -1
+
+
+button = Button(2)
+
+while True:
+    if button.is_pressed:
+        print("Pressed")
+    else:
+        print("Released")
+    sleep(1)
+
+nRF.close()
 
 last_time = time.monotonic()
 blink_time = .1

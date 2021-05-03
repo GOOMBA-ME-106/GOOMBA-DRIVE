@@ -173,7 +173,7 @@ class state_machine():
     go = None
     start = "IDLE"
 
-    def __init__(self,  motL, motR, encL, encR, magneto, accel, *sonar):
+    def __init__(self,  motL, motR, encL, encR, magneto, accel, cliff, *sonar):
         self.state = self.start
         self.mot1 = motL
         self.mot2 = motR
@@ -184,6 +184,7 @@ class state_machine():
         self.sL = sonar[0]
         self.sF = sonar[1]
         self.sR = sonar[2]
+        self.cliff = cliff
 
     def forward(self, speed=70):
         motor_level(speed, self.mot1)
@@ -197,15 +198,12 @@ class state_machine():
 
     def locate(self):  # TODO indicate state/event with data
         global dists
-        thing = [(0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0), (0)]
+        thing = [(0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0)]
         thing[0] = self.magnet.magnetic
         thing[1] = (self.encL.position, self.encR.position, 0)
         thing[2] = self.accel.acceleration
         thing[3] = dists
-        if self.cliff_det():  # gives binary indicator if there is a cliff
-            thing[4] = (1, 0, 0)
-        else:
-            thing[4] = (0, 0, 0)
+        thing[4] = (float(self.cliff_dist()), 0, 0)
         if self.state == "LOCATE":
             self.state = "FORWARD"
             thing[4][1] = 1
@@ -225,17 +223,17 @@ class state_machine():
         else:
             print(direction, "is not a valid direction to turn.")
 
-    def cliff_dist(self, cliff):  # in cm, good for ~9 to ~30
-        volt = (cliff.value * 3.3) / 65536
+    def cliff_dist(self):  # in cm, good for ~9 to ~30
+        volt = (self.cliff.value * 3.3) / 65536
         try:
             return (volt ** -1.173) * 29.988
         except ZeroDivisionError:
             print("The cliff sensor is giving bad readings.")
             time.sleep(0.05)
+            return "-1"
 
     def cliff_det(self):
-        global IR
-        dist = self.cliff_dist(IR)
+        dist = self.cliff_dist()
         try:
             if dist >= 20:
                 return True
@@ -275,7 +273,7 @@ i = 0
 s_thold = 30  # in cm
 start_button = None
 
-goomba = state_machine(motL, motR, encL, encR, lis3, lsm6, sonar)
+goomba = state_machine(motL, motR, encL, encR, lis3, lsm6, IR, sonar)
 while True:  # actual main loop
     ble.start_advertising(advertisement)
     while not ble.connected:  # for testing while connected
@@ -308,7 +306,7 @@ while True:  # actual main loop
                     motor_test(motL, motR, duration)
                 elif uart_test1 == "Y":
                     c_det = int(goomba.cliff_det())
-                    origins = [lis3.magnetic, encs, lsm6.acceleration, dists, (c_det,0,1)]
+                    origins = [lis3.magnetic, encs, lsm6.acceleration, dists, (c_det,0,3)]
                     send_bytes(rpi_write, origins)
 
         if RPI_CS.value is True:  # idea for signalling when to read from RPi
