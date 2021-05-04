@@ -156,11 +156,11 @@ def send_bytes(rpi, origin_data):
             rpi.write(bytes(struct.pack("d", float(value))))  # use struct.unpack to get float back
 
 
-def read_uart(rpi, numbytes=8):
+def read_uart(rpi, numbytes=4):
     data = rpi.read(numbytes)
     if data is not None:
         try:
-            data_string = struct.unpack("d", data)
+            data_string = struct.unpack("f", data)  # rpi sends data in "f"
             print(data_string)
         except Exception as e:
             print("No data found. \nError message:", e)

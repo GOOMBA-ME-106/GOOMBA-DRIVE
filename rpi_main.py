@@ -49,6 +49,13 @@ def read_uart(rpi, numbytes=8):
             er = e
     return (data_string, er)
 
+def send_bytes(rpi, origin_data):
+    rpi.write(struct.pack("f", 999))
+    for count0, d_list in enumerate(origin_data):
+        for value in d_list:
+            rpi.write(struct.pack("f", value))  # use struct.unpack to get float back
+            print(struct.pack("f", value))
+    rpi.write(struct.pack("f", 666))
 
 # launch GUI
 app = QtWidgets.QApplication(sys.argv)
@@ -61,7 +68,7 @@ goomba.show()  # TODO properly implement goomba_panel working version
 CLK = 18
 MOSI = 23
 
-# TODO if some variable is true, have functions turn a GPIO to digital high and call send UART function
+# TODO if some variable is true, have functions turn a GPIO to digital high and call send_bytes function
 def setupSpiPins(mosiPin):
     ''' Set all pins as an output except MOSI (Master Output, Slave Input)'''
     pass     

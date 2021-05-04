@@ -11,6 +11,12 @@ from PyQt5.QtWidgets import QMessageBox
 import time
 import serial
 import struct
+from math import cos, sin, atan2, degrees
+
+import gpiozero  # may need this for D.OUT
+from gpiozero import Button
+import RPi.GPIO as GPIO
+# may want to change buttons under list to a label to indicate state
 
 
 class Ui_Goomba(object):
@@ -24,9 +30,11 @@ class Ui_Goomba(object):
     text = "color:rgb(236, 240, 241)"
     green = "color:rgba(107,179,89,70)"  #6BB359
 
-    pwr_style = "QPushButton {background-color:rgb(26, 188, 156); color:rgb(236, 240, 241)}"
+    pwr_idle = "QPushButton {background-color:rgb(26, 188, 156); color:rgb(236, 240, 241)}"
     run = "QPushButton {background-color:rgb(46, 204, 113); color:rgb(236, 240, 241)}"
     pause = "QPushButton {background-color:rgb(231, 76, 60); color:rgb(236, 240, 241)}"
+    pwr_icon = 'power_icon.png'
+    radar_icon = "radar.png"
 
 
     last = False
@@ -399,9 +407,9 @@ class Ui_Goomba(object):
         font = QFont()
         font.setFamily("Nirmala UI")
         self.pwr.setFont(font)
-        self.pwr.setStyleSheet(self.pwr_style)
+        self.pwr.setStyleSheet(self.pwr_idle)
         self.pwr.setWhatsThis("")
-        self.pwr.setIcon(QIcon('power_icon.png'))
+        self.pwr.setIcon(QIcon(self.pwr_icon))
         self.pwr.setIconSize(QtCore.QSize(50, 50))
         self.pwr.setObjectName("pwr")
         self.verticalLayout_2.addWidget(self.pwr, 0, QtCore.Qt.AlignHCenter)
@@ -417,28 +425,42 @@ class Ui_Goomba(object):
         self.horizontalLayout_3.addLayout(self.verticalLayout_2)
 
         self.retranslateUi(Goomba)
-
-        
-
-        self.retranslateUi(Goomba)
         QtCore.QMetaObject.connectSlotsByName(Goomba)
 
         self.reader = ReadThread()
         self.reader.start()
         self.reader.update_progress.connect(self.sensor2label)
+        self.sender = SendThread()
 
         self.pwr.clicked.connect(self.toggle)
+        self.buttonBox.clicked.connect(self.list_btn_clicked)
 
-    def send_state(self):  # called when widget does something
-        self.sender = SendThread()
-        self.sender.start()  # executes run() in workerthread
-        self.sender.update_progress.connect(self.evt_update_progress)
-        #self.worker.finished.connect(self.evt_finished)  # signal to communicate between threads
-        #self.worker.worker_complete.connect(self.evt_finished)  # can now pass values with end
+    def list_btn_clicked(self):
+        item = self.listWidget.currentItem()
+        state = str(item.text())
+        self.label_13.setText("State: " + state)
+        self.sender.start(state)
+        if state == "Idle":
+            self.pwr_state = False
+            self.last = False
+            self.label_14.setText("Paused")
+            pwr_style = self.pause
+            self.pwr.setIcon(QIcon(self.pwr_icon))
+        elif (state == "Forward") or (state == "Turn: Left") or (state == "Turn: Right"):
+            self.pwr_state = True
+            self.last = True
+            self.label_14.setText("Running")
+            pwr_style = self.run
+            self.pwr.setIcon(QIcon(self.pwr_icon))
+        elif state == "Locate":
+            self.label_14.setText("Ignition")
+            pwr_style = self.pwr_idle
+            self.pwr.setIcon(QIcon(self.pwr_icon))
+        self.pwr.setStyleSheet(pwr_style)
 
     def error_alert(self, nut):
         # do stuff on signal that process is done
-        QMessageBox.information(self, "Uh oh, error:\n" + nut )
+        QMessageBox.information(self, "Uh oh, error:\n" + nut)
 
     def toggle(self):  # on pwr button click this is called
         if self.last is False:
@@ -451,8 +473,18 @@ class Ui_Goomba(object):
             self.pwr_state = False
         self.last = not self.last
         self.pwr.setStyleSheet(pwr_style)
-        return self.pwr_state
-    
+        self.pwr.setIcon(QIcon(self.pwr_icon))
+        if self.pwr_state:
+            self.sender.start("Ignite")
+        else:
+            self.sender.start("Idle")
+
+    def send_pwr(self, out):  # called when widget does something
+        self.sender.start(out)  # executes run() in workerthread
+        self.sender.update_progress.connect(self.evt_update_progress)
+        #self.worker.finished.connect(self.evt_finished)  # signal to communicate between threads
+        #self.worker.worker_complete.connect(self.evt_finished)  # can now pass values with end
+
     def sensor2label(self, vals):  # called when we receive a signal from other process
         start = 999
         end = 666
@@ -476,11 +508,21 @@ class Ui_Goomba(object):
             elif int(vals[14]) == FORWARD:
                 #bot is forward
                 self.label_17.setText(str(self.distance(encL_change, encR_change)))
+            elif int(vals[14]) == LOCATE:
+                #bot is forward
+                self.label_17.setText(str(self.distance(encL_change, encR_change)))
             elif int(vals[15]) == TEST:
                 self.label_14.setText("UART Test successful!")
 
             x, y, z = (vals[7], vals[8], vals[9])
-            #if x > (9.81 * 0.75): # TODO eventually store and sort data based on the accleromter data
+            if x > (9.81 * 0.75):  # TODO eventually store and sort data based on the accleromter data
+                vals.append("left too high")
+            elif x < -(9.81 * 0.75):
+                vals.append("right too high")
+            elif y < (9.81 * 0.75):
+                vals.append("front too high")
+            elif y < -(9.81 * 0.75):
+                vals.append("back too high")
             
             sonars = [vals[10], vals[11], vals[12]]
             self.label_6.setText(str(sonars[0]))
@@ -562,6 +604,7 @@ class Ui_Goomba(object):
         self.listWidget.setSortingEnabled(__sortingEnabled)
         self.pwr.setText(_translate("Goomba", ""))
 
+
 # for reference of data sent
 origins = [(0, 12.0, 2.3), (3, 254.1, 0), (5, 6, 7), (8, 9, 10), (1, 2, 3)]
 class ReadThread(QThread):  # try to see if i can run multiple threads at once if one has a loop going
@@ -572,7 +615,7 @@ class ReadThread(QThread):  # try to see if i can run multiple threads at once i
     def run(self):
         while True:
             data = []
-            for i in range(18): # range 17 for starting and stopping numbs?
+            for i in range(18):  # range 17 for starting and stopping numbs?
                 received, er = self.read_uart()
                 data.append(received[0])
             if len(data) > 2:  # if i get more than the start and end bit, transmit data
@@ -592,13 +635,17 @@ class ReadThread(QThread):  # try to see if i can run multiple threads at once i
           # print(data_string) gives (123.0,) as out, how to interpret?
 
 
-class sendThread(QThread):  # try to see if i can run multiple threads at once if one has a loop going
+class SendThread(QThread):  # try to see if i can run multiple threads at once if one has a loop going
     update_progress = pyqtSignal(list)  # need to define what kind of signal we want to send
     sender_complete = pyqtSignal(int)
     nRF = serial.Serial("/dev/ttyS0", 15000, timeout=0.3)
 
-    def run(self):
-        self.update_progress.emit(data)  # TODO take button presh to send state change to nRF
+    def run(self):  # TODO take button presh to send state change to nRF
+        # take a value to indicate which state to send
+        # turn GPIO digital out high
+        self.nRF
+        if thing == other_thing:
+            self.nRF.write(struct.pack("f"))
 
     def run_reference(self):  # why does this method go when worker.start() is called?
         # running our process
@@ -608,14 +655,14 @@ class sendThread(QThread):  # try to see if i can run multiple threads at once i
         for x in range(12):
             self.update_progress.emit(x)
             time.sleep(0.1)
-        self.worker_complete.emit([(1 ,0, 1.1),(1, 2, 3)])  # emitted at same time as finish signal
+        self.worker_complete.emit([(1, 0, 1.1),(1, 2, 3)])  # emitted at same time as finish signal
         # this is where we get each piece of data and send in an ordered manner to gui
 
-    def send_bytes(rpi, origin_data):
-        rpi.write(struct.pack("d", 999))
+    def send_bytes(self, origin_data):
+        self.nRF.write(struct.pack("d", 999))
         for count0, d_list in enumerate(origin_data):
             for value in d_list:
-                rpi.write(struct.pack("d", value))  # use struct.unpack to get float back
+                self.nRF.write(struct.pack("d", value))  # use struct.unpack to get float back
                 print(struct.pack("d", value))
         rpi.write(struct.pack("d", 666))
 
