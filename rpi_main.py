@@ -16,11 +16,12 @@ import struct
 from math import cos, sin, atan2, degrees
 
 import sys
-from goomba_panel import Ui_Goomba  # PyQt file to run GUI
+from goomba_panel  # PyQt file to run GUI & multithreading
 
-from PyQt5 import QtCore, QtGui, QtWidgets 
+from PyQt5 import QtCore, QtWidgets 
 from PyQt5.QtGui import QIcon, QFont
-from PyQt5.QtCore import QThread
+from PyQt5.QtCore import QThread, pyqtSignal
+from PyQt5.QtWidgets import QMessageBox
 
 nRF = serial.Serial("/dev/ttyS0", 15000, timeout=0.3)
 
@@ -52,14 +53,15 @@ def read_uart(rpi, numbytes=8):
 # launch GUI
 app = QtWidgets.QApplication(sys.argv)
 goomba = QtWidgets.QWidget()
-ui = Ui_Goomba()
+ui = goomba_panel.Ui_Goomba()
 ui.setupUi(goomba)
 goomba.show()  # TODO properly implement goomba_panel working version
 
-
+# Dylan GPIO stuff
 CLK = 18
 MOSI = 23
 
+# TODO if some variable is true, have functions turn a GPIO to digital high and call send UART function
 def setupSpiPins(mosiPin):
     ''' Set all pins as an output except MOSI (Master Output, Slave Input)'''
     pass     
@@ -67,7 +69,7 @@ def setupSpiPins(mosiPin):
 
 def readAdc(channel, mosiPin):
     if (channel < 0) or (channel > 7):
-        print "Invalid ADC Channel number, must be between [0,7]"
+        print("Invalid ADC Channel number, must be between [0,7]")
         return -1
 
 
@@ -82,6 +84,8 @@ while True:
 
 nRF.close()
 
+
+# stand in test loop
 last_time = time.monotonic()
 blink_time = .1
 while True:
