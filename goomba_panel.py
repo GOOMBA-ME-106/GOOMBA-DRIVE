@@ -483,6 +483,7 @@ class Ui_Goomba(object):
         FORWARD = 1
         TURN = 2
         TEST = 3
+        TIMER = 1
         if int(vals[0]) == start:
             # start assigning text
             mang = self.magnet_angle(vals[1], vals[2], vals[3])
@@ -502,7 +503,9 @@ class Ui_Goomba(object):
             elif int(vals[14]) == LOCATE:
                 #bot is forward
                 self.label_17.setText(str(self.distance(encL_change, encR_change)))
-            elif int(vals[15]) == TEST:
+            if int(vals[15]) == TIMER:
+                self.label_14.setText("Running")
+            if int(vals[15]) == TEST:
                 self.label_14.setText("UART Test successful!")
 
             x, y, z = (vals[7], vals[8], vals[9])

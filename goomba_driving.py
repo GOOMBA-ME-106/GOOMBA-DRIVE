@@ -146,8 +146,7 @@ def timer_set():
 
 
 # UART stuff for RPI
-rpi_write = UART(TX, RX, baudrate=9600, timeout=1)
-#rpi_read = UART(SCL, SDA, baudrate=9600)  # need pull up resistor for this?
+rpi_serial = UART(TX, RX, baudrate=9600, timeout=1)
 
 
 def send_bytes(rpi, origin_data):
@@ -206,7 +205,7 @@ class state_machine():
         thing[4] = (float(self.cliff_dist()), 0, 0)
         if self.state == "LOCATE":
             self.state = "FORWARD"
-            thing[4][1] = 1
+            thing[4][1] = 0
         else:
             self.state = "TURN"
             thing[4][1] = 2
@@ -307,11 +306,11 @@ while True:  # actual main loop
                 elif uart_test1 == "Y":
                     c_det = int(goomba.cliff_det())
                     origins = [lis3.magnetic, encs, lsm6.acceleration, dists, (c_det, 0, 3)]
-                    send_bytes(rpi_write, origins)
+                    send_bytes(rpi_serial, origins)
 
         if RPI_CS.value is True:  # idea for signalling when to read from RPi
             print("RPi sending data!")
-            data = read_uart(rpi_write)
+            data = read_uart(rpi_serial)
             print(data)
 
 
@@ -321,7 +320,7 @@ while True:  # actual main loop
                 print(goomba.state)
                 last = time.monotonic()
         if RPI_CS is True:
-            rpi_in = read_uart(rpi_write)
+            rpi_in = read_uart(rpi_serial)
         if uart.in_waiting:
             packet = Packet.from_stream(uart)
             if isinstance(packet, ButtonPacket):
@@ -340,12 +339,17 @@ while True:  # actual main loop
 
         dists = goomba.grab_sonar()
 
-        if timer_time is None:
-            timer_set()
-        if timer_event() == EVENT_TIMER:
-            c_det = int(goomba.cliff_det())
-            origins = [lis3.magnetic, encs, lsm6.acceleration, dists, (c_det, 0, 1)]
-            send_bytes(rpi_write, origins)
+        if goomba.state != "IDLE":
+            if timer_time is None:
+                timer_set()
+            if timer_event() == EVENT_TIMER:
+                c_det = goomba.cliff_dist()
+                if goomba.state == "FORWARD":
+                    comm = 1
+                if goomba.state == "TURN":
+                    comm = 2
+                origins = [lis3.magnetic, encs, lsm6.acceleration, dists, (c_det, comm, 1)]
+                send_bytes(rpi_serial, origins)
 
         if goomba.state == "IDLE":
             goomba.idle(start_button)
