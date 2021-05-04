@@ -85,7 +85,7 @@ motR1 = pwmio.PWMOut(PIN_MOTR1)
 motR = motor.DCMotor(motR0, motR1)
 motR.FAST_DECAY = 1
 
-DUTY_MAX = 2**16-1
+DUTY_MAX = 2 ** 16 - 1
 
 ble = BLERadio()
 uart = UARTService()
@@ -114,11 +114,11 @@ def error(err_string):
 
 
 def motor_level(level, mot):  # input is range of percents, -100 to 100
-    mot.throttle = float(level/100)
+    mot.throttle = float(level / 100)
 
 
 def motor_test(mot1, mot2, drive_time, mag=60):
-    drive = drive_time/2
+    drive = drive_time / 2
     motor_level(mag, mot1)
     motor_level(mag, mot2)
     time.sleep(drive)
@@ -173,7 +173,7 @@ class state_machine():
     go = None
     start = "IDLE"
 
-    def __init__(self,  motL, motR, encL, encR, magneto, accel, cliff, *sonar):
+    def __init__(self, motL, motR, encL, encR, magneto, accel, cliff, *sonar):
         self.state = self.start
         self.mot1 = motL
         self.mot2 = motR
@@ -306,7 +306,7 @@ while True:  # actual main loop
                     motor_test(motL, motR, duration)
                 elif uart_test1 == "Y":
                     c_det = int(goomba.cliff_det())
-                    origins = [lis3.magnetic, encs, lsm6.acceleration, dists, (c_det,0,3)]
+                    origins = [lis3.magnetic, encs, lsm6.acceleration, dists, (c_det, 0, 3)]
                     send_bytes(rpi_write, origins)
 
         if RPI_CS.value is True:  # idea for signalling when to read from RPi
@@ -344,7 +344,7 @@ while True:  # actual main loop
             timer_set()
         if timer_event() == EVENT_TIMER:
             c_det = int(goomba.cliff_det())
-            origins = [lis3.magnetic, encs, lsm6.acceleration, dists, (c_det,0,1)]
+            origins = [lis3.magnetic, encs, lsm6.acceleration, dists, (c_det, 0, 1)]
             send_bytes(rpi_write, origins)
 
         if goomba.state == "IDLE":

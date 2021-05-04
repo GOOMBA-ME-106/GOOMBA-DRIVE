@@ -16,7 +16,7 @@ import struct
 from math import cos, sin, atan2, degrees
 
 import sys
-from goomba_panel  # PyQt file to run GUI & multithreading
+import goomba_panel  # PyQt file to run GUI & multithreading
 
 from PyQt5 import QtCore, QtWidgets 
 from PyQt5.QtGui import QIcon, QFont
@@ -87,7 +87,7 @@ while True:
         print("Pressed")
     else:
         print("Released")
-    sleep(1)
+    time.sleep(1)
 
 nRF.close()
 
@@ -104,7 +104,7 @@ while True:
         else:
             pass
     if ui.pwr_state:  # this is does not work while gui running. has to be in GUI class
-            print("on")
+        print("on")
     else:
         '''
         if goomba.pwr_state:  

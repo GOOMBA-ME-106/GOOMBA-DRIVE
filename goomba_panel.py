@@ -36,7 +36,6 @@ class Ui_Goomba(object):
     pwr_icon = 'power_icon.png'
     radar_icon = "radar.png"
 
-
     last = False
     pwr_state = ""
     encL_now = 0
@@ -457,10 +456,7 @@ class Ui_Goomba(object):
             pwr_style = self.pwr_idle
             self.pwr.setIcon(QIcon(self.pwr_icon))
         self.pwr.setStyleSheet(pwr_style)
-
-    def error_alert(self, nut):
-        # do stuff on signal that process is done
-        QMessageBox.information(self, "Uh oh, error:\n" + nut)
+        self.sender.finished.connect(self.send_finish)
 
     def toggle(self):  # on pwr button click this is called
         if self.last is False:
@@ -478,12 +474,7 @@ class Ui_Goomba(object):
             self.sender.start("Ignite")
         else:
             self.sender.start("Idle")
-
-    def send_pwr(self, out):  # called when widget does something
-        self.sender.start(out)  # executes run() in workerthread
-        self.sender.update_progress.connect(self.evt_update_progress)
-        #self.worker.finished.connect(self.evt_finished)  # signal to communicate between threads
-        #self.worker.worker_complete.connect(self.evt_finished)  # can now pass values with end
+        self.sender.finished.connect(self.send_finish)
 
     def sensor2label(self, vals):  # called when we receive a signal from other process
         start = 999
@@ -529,7 +520,7 @@ class Ui_Goomba(object):
             self.label_7.setText(str(sonars[1]))
             self.label_8.setText(str(sonars[2]))
 
-            self.label_10.setText(str(vals[13])+" cm")
+            self.label_10.setText(str(vals[13]) + " cm")
             if (vals[13] > 20):
                 self.label_11.setText("True")
                 self.label_11.setStyleSheet(self.red)
@@ -543,7 +534,7 @@ class Ui_Goomba(object):
             
         else:
             # go through list until i find start and end values
-            e = vals.index(float(end)) # find where it ends
+            e = vals.index(float(end))  # find where it ends
             self.label_9.setText("Start data out of sync. Check UART connections.")
             time.sleep(0.1)
             #raise Exception("Start of data found at "+str(e)+" index. Make a function to auto-repair.")
@@ -559,15 +550,22 @@ class Ui_Goomba(object):
         return self.vector_2_degrees(magnet_x, magnet_y)
 
     def distance(self, enc_change0, enc_change1):
-        enc_change = (enc_change0 + enc_change1)/2
+        enc_change = (enc_change0 + enc_change1) / 2
         dist = enc_change * constant
         return dist
     
     def turn_angle(self, enc_change0, enc_change1, prior_ang=0):  # cross reference w/ magnetometer?
-        enc_change = (enc_change0 + enc_change1)/2
+        enc_change = (enc_change0 + enc_change1) / 2
         ang = enc_change * constant
-        ang_rad = ang * (3.141592/180) + prior_ang
+        ang_rad = ang * (3.141592 / 180) + prior_ang
         return ang_rad
+    
+    def send_finish(self):
+        self.buttonBox.setStyleSheet(self.green)
+
+    def error_alert(self, nut):
+        # do stuff on signal that process is done
+        QMessageBox.information(self, "Uh oh, error:\n" + nut)
 
     def retranslateUi(self, Goomba):
         _translate = QtCore.QCoreApplication.translate
@@ -632,21 +630,36 @@ class ReadThread(QThread):  # try to see if i can run multiple threads at once i
                 print("No data found. \nError message:", e)
                 er = e
         return (data_string, er)
-          # print(data_string) gives (123.0,) as out, how to interpret?
+        # print(data_string) gives (123.0,) as out, how to interpret?
 
 
 class SendThread(QThread):  # try to see if i can run multiple threads at once if one has a loop going
-    update_progress = pyqtSignal(list)  # need to define what kind of signal we want to send
-    sender_complete = pyqtSignal(int)
+    update_progress = pyqtSignal(int)  # need to define what kind of signal we want to send
+    #sender_complete = pyqtSignal(int)
     nRF = serial.Serial("/dev/ttyS0", 15000, timeout=0.3)
+
+    def __init__(self, state):  # should allow us to pass arguements into class
+        super().__init__()
+        self.state = state
 
     def run(self):  # TODO take button presh to send state change to nRF
         # take a value to indicate which state to send
         # turn GPIO digital out high
-        self.nRF
-        if thing == other_thing:
-            self.nRF.write(struct.pack("f"))
-
+        self.update_progress.emit(1)
+        if self.state == "Idle":
+            val = 0
+        elif (self.state == "Forward"): 
+            val = 1
+        elif (self.state == "Turn: Left"):
+            val = 2
+        elif (self.state == "Turn: Right"):
+            val = 3
+        elif self.state == "Locate":
+            val = 4
+        else:  # error case
+            val = 5
+        self.send_bytes(val)
+        
     def run_reference(self):  # why does this method go when worker.start() is called?
         # running our process
         # note can't call method in separate class
@@ -655,17 +668,13 @@ class SendThread(QThread):  # try to see if i can run multiple threads at once i
         for x in range(12):
             self.update_progress.emit(x)
             time.sleep(0.1)
-        self.worker_complete.emit([(1, 0, 1.1),(1, 2, 3)])  # emitted at same time as finish signal
+        self.worker_complete.emit([(1, 0, 1.1), (1, 2, 3)])  # emitted at same time as finish signal
         # this is where we get each piece of data and send in an ordered manner to gui
 
-    def send_bytes(self, origin_data):
-        self.nRF.write(struct.pack("d", 999))
-        for count0, d_list in enumerate(origin_data):
-            for value in d_list:
-                self.nRF.write(struct.pack("d", value))  # use struct.unpack to get float back
-                print(struct.pack("d", value))
-        rpi.write(struct.pack("d", 666))
-
+    def send_bytes(self, value):  # sending single int to indicate state
+        self.nRF.write(struct.pack("f", 999))
+        self.nRF.write(struct.pack("f", value))  # use struct.unpack to get float back
+        self.nRF.write(struct.pack("f", 666))
 
 
 if __name__ == "__main__":
