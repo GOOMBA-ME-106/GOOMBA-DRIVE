@@ -44,6 +44,10 @@ class Ui_Goomba(object):
     encR_prev = 0
     ang_prev = 0
     ang_now = 0
+    
+    def __init__(self, nRF):  # should allow us to pass arguements into class
+        super().__init__()
+        self.nRF = nRF
 
     def setupUi(self, Goomba):
         Goomba.setObjectName("Goomba")
@@ -426,10 +430,10 @@ class Ui_Goomba(object):
         self.retranslateUi(Goomba)
         QtCore.QMetaObject.connectSlotsByName(Goomba)
 
-        self.reader = ReadThread()
+        self.reader = ReadThread(self.nRF)
         self.reader.start()
         self.reader.update_progress.connect(self.sensor2label)
-        self.sender = SendThread()
+        self.sender = SendThread(self.nRF)
 
         self.pwr.clicked.connect(self.toggle)
         self.buttonBox.clicked.connect(self.list_btn_clicked)
@@ -611,7 +615,10 @@ origins = [(0, 12.0, 2.3), (3, 254.1, 0), (5, 6, 7), (8, 9, 10), (1, 2, 3)]
 class ReadThread(QThread):  # try to see if i can run multiple threads at once if one has a loop going
     update_progress = pyqtSignal(list)  # need to define what kind of signal we want to send
     worker_complete = pyqtSignal(list)
-    nRF = serial.Serial("/dev/ttyS0", 15000, timeout=0.3)
+
+    def __init__(self, nRF):  # should allow us to pass arguements into class
+        super().__init__()
+        self.nRF = nRF
 
     def run(self):
         while True:
@@ -641,23 +648,23 @@ class SendThread(QThread):  # try to see if i can run multiple threads at once i
     #sender_complete = pyqtSignal(int)
     nRF = serial.Serial("/dev/ttyS0", 15000, timeout=0.3)
 
-    def __init__(self, state):  # should allow us to pass arguements into class
+    def __init__(self, nRF):  # should allow us to pass arguements into class
         super().__init__()
-        self.state = state
+        self.nRF = nRF
 
-    def run(self):  # TODO take button presh to send state change to nRF
+    def run(self, state):  # TODO take button presh to send state change to nRF
         # take a value to indicate which state to send
         # turn GPIO digital out high
         self.update_progress.emit(1)
-        if self.state == "Idle":
+        if state == "Idle":
             val = 0
-        elif (self.state == "Forward"): 
+        elif (state == "Forward"): 
             val = 1
-        elif (self.state == "Turn: Left"):
+        elif (state == "Turn: Left"):
             val = 2
-        elif (self.state == "Turn: Right"):
+        elif (state == "Turn: Right"):
             val = 3
-        elif self.state == "Locate":
+        elif state == "Locate":
             val = 4
         else:  # error case
             val = 5
@@ -682,9 +689,10 @@ class SendThread(QThread):  # try to see if i can run multiple threads at once i
 
 if __name__ == "__main__":
     import sys
+    nRF = serial.Serial("/dev/ttyS0", 15000, timeout=0.3)
     app = QtWidgets.QApplication(sys.argv)
     Goomba = QtWidgets.QWidget()
-    ui = Ui_Goomba()
+    ui = Ui_Goomba(nRF)
     ui.setupUi(Goomba)
     Goomba.show()
     sys.exit(app.exec())
