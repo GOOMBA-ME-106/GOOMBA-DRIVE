@@ -172,7 +172,7 @@ class state_machine():
     go = None
     start = "IDLE"
 
-    def __init__(self, motL, motR, encL, encR, magneto, accel, cliff, *sonar):
+    def __init__(self, motL, motR, encL, encR, magneto, accel, cliff, sonar):
         self.state = self.start
         self.mot1 = motL
         self.mot2 = motR
@@ -282,7 +282,7 @@ while True:  # actual main loop
         print('Magnetometer: {0:10.2f}X {1:10.2f}Y {2:10.2f}Z uT'.format(*lis3.magnetic))
         print('Encoders: {0:10.2f}L {1:10.2f}R pulses'.format(*encs))
         print("Acceleration: {:.2f} {:.2f} {:.2f} m/s^2".format(*lsm6.acceleration))
-        cliff = goomba.cliff_dist(IR)
+        cliff = goomba.cliff_dist()
         print("Cliff distance:", cliff, "cm")
         print("Cliff?", goomba.cliff_det(), "cm")
 

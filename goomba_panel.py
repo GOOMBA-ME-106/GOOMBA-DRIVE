@@ -260,6 +260,7 @@ class Ui_Goomba(object):
         self.verticalLayout.addItem(spacerItem2)
         self.label_18 = QtWidgets.QLabel(Goomba)
         font = QFont()
+        font.setFamily("Nirmala UI")
         font.setPointSize(16)
         font.setBold(True)
         font.setWeight(75)
@@ -442,7 +443,8 @@ class Ui_Goomba(object):
         item = self.listWidget.currentItem()
         state = str(item.text())
         self.label_13.setText("State: " + state)
-        self.sender.start(state)
+        self.sender.state = state  # workaround bcuz can't pass arguements to start() 
+        self.sender.start()
         if state == "Idle":
             self.pwr_state = False
             self.last = False
@@ -475,9 +477,11 @@ class Ui_Goomba(object):
         self.pwr.setStyleSheet(pwr_style)
         self.pwr.setIcon(QIcon(self.pwr_icon))
         if self.pwr_state:
-            self.sender.start("Ignite")
+            self.sender.state = "Ignite"  # workaround bcuz can't pass arguements to start() 
+            self.sender.start()
         else:
-            self.sender.start("Idle")
+            self.sender.state = "Idle"
+            self.sender.start()
         self.sender.finished.connect(self.send_finish)
 
     def sensor2label(self, vals):  # called when we receive a signal from other process
@@ -541,8 +545,11 @@ class Ui_Goomba(object):
             
         else:
             # go through list until i find start and end values
-            e = vals.index(float(end))  # find where it ends
-            self.label_9.setText("Start data out of sync. Check UART connections.")
+            try:
+                e = vals.index(float(end))  # find where it ends
+            except ValueError:
+                e = "No signal"
+            self.label_9.setText("Start data out of sync. \nCheck UART connections.\n" + str(e))
             time.sleep(0.1)
             #raise Exception("Start of data found at "+str(e)+" index. Make a function to auto-repair.")
 
@@ -625,7 +632,10 @@ class ReadThread(QThread):  # try to see if i can run multiple threads at once i
             data = []
             for i in range(18):  # range 17 for starting and stopping numbs?
                 received, er = self.read_uart()
-                data.append(received[0])
+                try:
+                    data.append(received[0])
+                except Exception:
+                    data.append(0)
             if len(data) > 2:  # if i get more than the start and end bit, transmit data
                 self.update_progress.emit(data)
 
@@ -646,29 +656,34 @@ class ReadThread(QThread):  # try to see if i can run multiple threads at once i
 class SendThread(QThread):  # try to see if i can run multiple threads at once if one has a loop going
     update_progress = pyqtSignal(int)  # need to define what kind of signal we want to send
     #sender_complete = pyqtSignal(int)
-    nRF = serial.Serial("/dev/ttyS0", 15000, timeout=0.3)
+    #nRF = serial.Serial("/dev/ttyS0", 15000, timeout=0.3)
 
-    def __init__(self, nRF):  # should allow us to pass arguements into class
+    def __init__(self, nRF, state="bad"):  # should allow us to pass arguements into class
         super().__init__()
         self.nRF = nRF
+        self.state = state
 
-    def run(self, state):  # TODO take button presh to send state change to nRF
+    def run(self):  # TODO take button presh to send state change to nRF
         # take a value to indicate which state to send
         # turn GPIO digital out high
         self.update_progress.emit(1)
-        if state == "Idle":
+        if self.state == "Idle":
             val = 0
-        elif (state == "Forward"): 
+        elif (self.state == "Forward"): 
             val = 1
-        elif (state == "Turn: Left"):
+        elif (self.state == "Turn: Left"):
             val = 2
-        elif (state == "Turn: Right"):
+        elif (self.state == "Turn: Right"):
             val = 3
-        elif state == "Locate":
+        elif self.state == "Locate":
             val = 4
+        elif self.state == "bad":
+            val = 5
+            print("Did not pass in new state")
         else:  # error case
             val = 5
         self.send_bytes(val)
+        self.state = "bad"
         
     def run_reference(self):  # why does this method go when worker.start() is called?
         # running our process
