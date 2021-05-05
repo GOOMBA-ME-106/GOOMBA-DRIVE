@@ -1,7 +1,14 @@
-# Using the designer, it makes an interconnected web of layouts much simpler to do.
-# in virtual environment 
-# pyqt5-tools designer
-# pyuic5 -x your_ui.ui -o your_output.py
+# goomba_panel.py - ME 106 GOOMBA Project Code
+# referenced module for rpi_main to launch GUI and multithreading
+#
+# Written by Ryan Sands (sandsryanj@gmail.com)
+#   v1.00 05-May-2021 First draft. reads from uart, interprets and sends to correct labels
+#                        additionally sends a single integer signal to change state of nRF
+# Notes:
+#  Using the designer, it makes an interconnected web of layouts much simpler to do.
+#  in virtual environment 
+#  pyqt5-tools designer
+#  pyuic5 -x your_ui.ui -o your_output.py
 
 from PyQt5 import QtCore, QtWidgets 
 from PyQt5.QtGui import QIcon, QFont
@@ -494,6 +501,7 @@ class Ui_Goomba(object):
         TIMER = 1
         if int(vals[0]) == start:
             # start assigning text
+            # TODO make this better with for loop so i don't have to specify the indivdual indexes
             mang = self.magnet_angle(vals[1], vals[2], vals[3])
             self.label_12.setText(str(mang))
 
@@ -521,7 +529,7 @@ class Ui_Goomba(object):
                 vals.append("left too high")
             elif x < -(9.81 * 0.75):
                 vals.append("right too high")
-            elif y < (9.81 * 0.75):
+            elif y > (9.81 * 0.75):
                 vals.append("front too high")
             elif y < -(9.81 * 0.75):
                 vals.append("back too high")
@@ -549,7 +557,7 @@ class Ui_Goomba(object):
                 e = vals.index(float(end))  # find where it ends
             except ValueError:
                 e = "No signal"
-            self.label_9.setText("Start data out of sync. \nCheck UART connections.\n" + str(e))
+            self.label_9.setText("Bad data passed.\nCheck ReadThread class.\n" + str(e))
             time.sleep(0.1)
             #raise Exception("Start of data found at "+str(e)+" index. Make a function to auto-repair.")
 
@@ -619,7 +627,7 @@ class Ui_Goomba(object):
 
 # for reference of data sent
 origins = [(0, 12.0, 2.3), (3, 254.1, 0), (5, 6, 7), (8, 9, 10), (1, 2, 3)]
-class ReadThread(QThread):  # try to see if i can run multiple threads at once if one has a loop going
+class ReadThread(QThread):
     update_progress = pyqtSignal(list)  # need to define what kind of signal we want to send
     worker_complete = pyqtSignal(list)
 
@@ -629,7 +637,7 @@ class ReadThread(QThread):  # try to see if i can run multiple threads at once i
 
     def run(self):
         while True:
-            data = []
+            data = []  # TODO keep reading and ignore data until I get start signal
             for i in range(18):  # range 17 for starting and stopping numbs?
                 received, er = self.read_uart()
                 try:
@@ -653,9 +661,8 @@ class ReadThread(QThread):  # try to see if i can run multiple threads at once i
         # print(data_string) gives (123.0,) as out, how to interpret?
 
 
-class SendThread(QThread):  # try to see if i can run multiple threads at once if one has a loop going
-    update_progress = pyqtSignal(int)  # need to define what kind of signal we want to send
-    #sender_complete = pyqtSignal(int)
+class SendThread(QThread):
+    update_progress = pyqtSignal(int)
     #nRF = serial.Serial("/dev/ttyS0", 15000, timeout=0.3)
 
     def __init__(self, nRF, state="bad"):  # should allow us to pass arguements into class
@@ -695,10 +702,11 @@ class SendThread(QThread):  # try to see if i can run multiple threads at once i
             time.sleep(0.1)
         self.worker_complete.emit([(1, 0, 1.1), (1, 2, 3)])  # emitted at same time as finish signal
         # this is where we get each piece of data and send in an ordered manner to gui
-
+        
+    # should i loop this a few times to make sure nRF receives it?
     def send_bytes(self, value):  # sending single int to indicate state
         self.nRF.write(struct.pack("f", 999))
-        self.nRF.write(struct.pack("f", value))  # use struct.unpack to get float back
+        self.nRF.write(struct.pack("f", value))
         self.nRF.write(struct.pack("f", 666))
 
 
