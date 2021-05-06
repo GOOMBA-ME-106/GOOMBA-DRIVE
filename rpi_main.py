@@ -23,7 +23,7 @@ from PyQt5.QtGui import QIcon, QFont
 from PyQt5.QtCore import QThread, pyqtSignal
 from PyQt5.QtWidgets import QMessageBox
 
-nRF = serial.Serial("/dev/ttyS0", 15000, timeout=0.3)
+nRF = serial.Serial("/dev/ttyS0", 20000, timeout=0.3)
 
 
 def error(err_string):

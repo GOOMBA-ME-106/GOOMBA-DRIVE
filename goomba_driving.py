@@ -146,7 +146,7 @@ def timer_set():
 
 
 # UART stuff for RPI
-rpi_serial = UART(TX, RX, baudrate=9600, timeout=1)
+rpi_serial = UART(TX, RX, baudrate=20000, timeout=0.3)
 
 
 def send_bytes(rpi, origin_data):

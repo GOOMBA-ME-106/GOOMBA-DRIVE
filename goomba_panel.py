@@ -500,8 +500,8 @@ class Ui_Goomba(object):
         TEST = 3
         TIMER = 1
         # start assigning text
-        # TODO make this better with for loop so i don't have to specify the indivdual indexes?
         try:  # in case signal lost part way through
+            # TODO make this better with for loop so i don't have to specify the indivdual indexes?
             mang = self.magnet_angle(vals[0], vals[1], vals[2])
             self.label_12.setText(str(mang))
 
@@ -714,7 +714,7 @@ class SendThread(QThread):
 
 if __name__ == "__main__":
     import sys
-    nRF = serial.Serial("/dev/ttyS0", 15000, timeout=0.3)
+    nRF = serial.Serial("/dev/ttyS0", 20000, timeout=0.3)
     app = QtWidgets.QApplication(sys.argv)
     Goomba = QtWidgets.QWidget()
     ui = Ui_Goomba(nRF)
