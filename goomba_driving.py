@@ -199,7 +199,7 @@ class state_machine():
         global dists
         thing = [(0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0)]
         thing[0] = self.magnet.magnetic
-        thing[1] = (self.encL.position, self.encR.position, 0)
+        thing[1] = (self.encL.position, self.encR.position)
         thing[2] = self.accel.acceleration
         thing[3] = dists
         thing[4] = (float(self.cliff_dist()), 0, 0)

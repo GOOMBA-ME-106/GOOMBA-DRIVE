@@ -499,32 +499,32 @@ class Ui_Goomba(object):
         TURN = 2
         TEST = 3
         TIMER = 1
-        if int(vals[0]) == start:
-            # start assigning text
-            # TODO make this better with for loop so i don't have to specify the indivdual indexes
-            mang = self.magnet_angle(vals[1], vals[2], vals[3])
+        # start assigning text
+        # TODO make this better with for loop so i don't have to specify the indivdual indexes?
+        try:  # in case signal lost part way through
+            mang = self.magnet_angle(vals[0], vals[1], vals[2])
             self.label_12.setText(str(mang))
 
-            self.encL_now, self.encR_now = [vals[4], vals[5]]
+            self.encL_now, self.encR_now = [vals[3], vals[4]]
             encL_change = self.encL_now - self.encL_prev
             encR_change = self.encR_now - self.encR_prev
             self.encL_prev = self. encL_now
             self.encR_prev = self. encR_now
-            if int(vals[14]) == TURN: 
+            if int(vals[12]) == TURN: 
                 #bot is turning, angle according to encoders. may want to add additional label for this
                 self.label_12.setText(str(self.turn_angle(encL_change, encR_change)))
-            elif int(vals[14]) == FORWARD:
+            elif int(vals[12]) == FORWARD:
                 #bot is forward
                 self.label_17.setText(str(self.distance(encL_change, encR_change)))
-            elif int(vals[14]) == LOCATE:
+            elif int(vals[12]) == LOCATE:
                 #bot is forward
                 self.label_17.setText(str(self.distance(encL_change, encR_change)))
-            if int(vals[15]) == TIMER:
+            if int(vals[13]) == TIMER:
                 self.label_14.setText("Running")
-            if int(vals[15]) == TEST:
+            if int(vals[13]) == TEST:
                 self.label_14.setText("UART Test successful!")
 
-            x, y, z = (vals[7], vals[8], vals[9])
+            x, y, z = (vals[5], vals[6], vals[7])
             if x > (9.81 * 0.75):  # TODO eventually store and sort data based on the accleromter data
                 vals.append("left too high")
             elif x < -(9.81 * 0.75):
@@ -534,32 +534,24 @@ class Ui_Goomba(object):
             elif y < -(9.81 * 0.75):
                 vals.append("back too high")
             
-            sonars = [vals[10], vals[11], vals[12]]
+            sonars = [vals[8], vals[9], vals[10]]
             self.label_6.setText(str(sonars[0]))
             self.label_7.setText(str(sonars[1]))
             self.label_8.setText(str(sonars[2]))
 
-            self.label_10.setText(str(vals[13]) + " cm")
-            if (vals[13] > 20):
+            self.label_10.setText(str(vals[11]) + " cm")
+            if (vals[11] > 20):
                 self.label_11.setText("True")
                 self.label_11.setStyleSheet(self.red)
-            elif vals[13] < 0:
+            elif vals[11] < 0:
                 self.label_11.setText("Bad reading")
                 self.label_11.setStyleSheet(self.light_brown)
                 self.error_alert("Bad reading")
             else:
                 self.label_11.setText("False")
                 self.label_11.setStyleSheet(self.red)
-            
-        else:
-            # go through list until i find start and end values
-            try:
-                e = vals.index(float(end))  # find where it ends
-            except ValueError:
-                e = "No signal"
-            self.label_9.setText("Bad data passed.\nCheck ReadThread class.\n" + str(e))
-            time.sleep(0.1)
-            #raise Exception("Start of data found at "+str(e)+" index. Make a function to auto-repair.")
+        except IndexError as e:
+            print("Incomplete signal:", e)
 
     def vector_2_degrees(self, x, y):
         angle = degrees(atan2(y, x))
@@ -637,13 +629,23 @@ class ReadThread(QThread):
 
     def run(self):
         while True:
-            data = []  # TODO keep reading and ignore data until I get start signal
-            for i in range(18):  # range 17 for starting and stopping numbs?
+            data = []
+            detect_start = 0
+            detect_end = 0
+            while detect_start != 666:  # throws away data until it receives start
                 received, er = self.read_uart()
+                if received is not None:
+                    detect_start = int(received)
+                else:
+                    pass  # may want to do something w/ error later
+            while detect_end != 999:  # stores data until end bit
+                received, er = self.read_uart()
+                data.append(received[0])
                 try:
-                    data.append(received[0])
-                except Exception:
-                    data.append(0)
+                    detect_end = int(received)
+                except TypeError:
+                    print("Signal lost.")
+                    detect_end = 999
             if len(data) > 2:  # if i get more than the start and end bit, transmit data
                 self.update_progress.emit(data)
 
@@ -655,7 +657,7 @@ class ReadThread(QThread):
             try:
                 data_string = struct.unpack("d", data)
             except Exception as e:
-                print("No data found. \nError message:", e)
+                print("Error message:", e)
                 er = e
         return (data_string, er)
         # print(data_string) gives (123.0,) as out, how to interpret?
