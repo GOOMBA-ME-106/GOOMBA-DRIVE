@@ -128,50 +128,13 @@ def motor_test(mot1, mot2, drive_time, mag=60):
     time.sleep(0.1)
 
 
-def timer_event():
-    global timer_time
-
-    if (timer_time is not None) and time.monotonic() >= timer_time:
-        timer_time = None
-        return EVENT_TIMER
-    else:
-        return EVENT_NONE
-
-
-def timer_set():
-    global timer_time
-    timer_time = time.monotonic() + DATA_SEND_INTERVAL
-
-
-# UART stuff for RPI
-rpi_serial = UART(TX, RX, baudrate=20000, timeout=0.3)
-
-
-def send_bytes(rpi, origin_data):
-    for count0, d_list in enumerate(origin_data):
-        for value in d_list:
-            rpi.write(bytes(struct.pack("d", float(value))))  # use struct.unpack to get float back
-
-
-def read_uart(rpi, numbytes=4):
-    data = rpi.read(numbytes)
-    data_string = None
-    er = None
-    if data is not None:
-        try:
-            data_string = struct.unpack("d", data)
-        except Exception as e:
-            print("Error message:", e)
-            er = e
-    return (data_string, er)
-
-
 # States of state machine
 class state_machine():
     go = None
     start = "IDLE"
+    origins = []
 
-    def __init__(self, motL, motR, encL, encR, magneto, accel, cliff, sonar):
+    def __init__(self, motL, motR, encL, encR, magneto, accel, cliff, sonar, rpi_serial):
         self.state = self.start
         self.mot1 = motL
         self.mot2 = motR
@@ -183,6 +146,7 @@ class state_machine():
         self.sF = sonar[1]
         self.sR = sonar[2]
         self.cliff = cliff
+        self.serial = rpi_serial
 
     def forward(self, speed=70):
         motor_level(speed, self.mot1)
@@ -258,9 +222,46 @@ class state_machine():
         except Exception:
             print("The front sonar is not detected.")
             distF = 0
-
         return [distL, distF, distR]
-# TODO method to interpret signal from RPi
+
+    def send_bytes(self, origin_data):
+        for count0, d_list in enumerate(origin_data):
+            for value in d_list:
+                self.serial.write(bytes(struct.pack("d", float(value))))  # use struct.unpack to get float back
+
+    def read_uart(self, numbytes=4):
+        data = self.serial.read(numbytes)
+        data_string = None
+        er = None
+        if data is not None:
+            try:
+                data_string = struct.unpack("d", data)
+            except Exception as e:
+                print("Error message:", e)
+                er = e
+        return (data_string, er)
+    
+    def evt_handler(self):
+        o = self.locate()  # changes state and grabs sensor data
+        self.origins.append(o)    # stores sensor data
+        self.send_bytes(o)  # sends data
+        timer_set()  # resets timer
+
+
+def timer_event():
+    global timer_time
+
+    if (timer_time is not None) and time.monotonic() >= timer_time:
+        timer_time = None
+        return EVENT_TIMER
+    else:
+        return EVENT_NONE
+
+
+def timer_set():
+    global timer_time
+    timer_time = time.monotonic() + DATA_SEND_INTERVAL
+
 
 # testing parameters
 testing = True
@@ -271,10 +272,12 @@ test_q = "Y"
 last = time.monotonic()
 origins = [[(0, 0, 0), (0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0)]]
 i = 0
-s_thold = 30  # in cm
+s_thold = 25  # in cm
 start_button = None
+# UART stuff for RPI
+rpi_serial = UART(TX, RX, baudrate=20000, timeout=0.3)
 # creating instance of state machine
-goomba = state_machine(motL, motR, encL, encR, lis3, lsm6, IR, sonar)
+goomba = state_machine(motL, motR, encL, encR, lis3, lsm6, IR, sonar, rpi_serial)
 while True:  # actual main loop
     ble.start_advertising(advertisement)
     while not ble.connected:  # for testing while connected
@@ -308,11 +311,14 @@ while True:  # actual main loop
                 elif uart_test1 == "Y":
                     c_det = int(goomba.cliff_det())
                     o = [lis3.magnetic, encs, lsm6.acceleration, dists, (c_det, 0, 3)]
-                    send_bytes(rpi_serial, o)
+                    goomba.send_bytes(o)
 
         if RPI_CS.value is True:  # idea for signalling when to read from RPi
+            data = [0, 0, 0]
+            er = [0, 0, 0]
             print("RPi sending data!")
-            data, er = read_uart(rpi_serial)
+            for i in range(3):
+                data[i], er[i] = goomba.read_uart()
             print(data)
 
 
@@ -322,9 +328,9 @@ while True:  # actual main loop
                 print(goomba.state)
                 last = time.monotonic()
         if RPI_CS is True:  # initial version of read functionality
-            rpi_in, er = read_uart(rpi_serial)
+            rpi_in, er = goomba.read_uart()
             if int(rpi_in) == 666:  # received start signal
-                state_in = read_uart(rpi_serial)
+                state_in = goomba.read_uart()
                 if state_in[0] is float:
                     new_state = int(state_in[0])
                     if new_state == 0:
@@ -341,7 +347,7 @@ while True:  # actual main loop
                         goomba.state == "IDLE"
                         print("\"bad\" sent from RPi. Check SendThread class")
                     else:
-                        print("invalid state from rpi")
+                        print("Invalid state from RPi")
                 else:
                     print("Signal interrupted from RPi")
 
@@ -359,7 +365,7 @@ while True:  # actual main loop
                         dists = goomba.grab_sonar()
                         encs = (goomba.encL.position, goomba.encR.position)
                         o = [lis3.magnetic, encs, lsm6.acceleration, dists, (c_det, 0, 3)]
-                        send_bytes(rpi_serial, o)
+                        goomba.send_bytes(o)
                     elif packet.button == B3:
                         # some way to send origins in an organized manner?
                         print("Button 3 pressed! Toggled print statements.")
@@ -369,9 +375,7 @@ while True:  # actual main loop
             goomba.idle(start_button)
             start_button = False
         elif goomba.state == "LOCATE":
-            o = goomba.locate()   # changes state to FORWARD
-            origins.append(o)
-            send_bytes(rpi_serial, o)
+            goomba.evt_handler()
 
         if goomba.state != "IDLE":
             if timer_time is None:  # timer acts independently and does not use locate to not change state
@@ -385,24 +389,18 @@ while True:  # actual main loop
                 if goomba.state == "TURN":
                     comm = 2
                 o = [lis3.magnetic, encs, lsm6.acceleration, dists, (c_det, comm, 1)]
-                send_bytes(rpi_serial, o)
+                goomba.send_bytes(o)
 
         elif goomba.state == "FORWARD":
             goomba.forward()
             if (goomba.sL.distance <= s_thold) and (goomba.sF.distance <= s_thold):
-                o = goomba.locate()  # changes state to TURN
-                origins.append(o)
-                send_bytes(rpi_serial, o)
+                goomba.evt_handler()
                 goomba.go = "RIGHT"
             elif (goomba.sR.distance <= s_thold) and (goomba.sF.distance <= s_thold):
-                o = goomba.locate()  # changes state to TURN
-                origins.append(o)
-                send_bytes(rpi_serial, o)
+                goomba.evt_handler()
                 goomba.go = "LEFT"
             elif goomba.cliff_det() is True:
-                o = goomba.locate()  # changes state to TURN
-                origins.append(o)
-                send_bytes(rpi_serial, o)
+                goomba.evt_handler()
                 goomba.go = "RIGHT"
             elif start_button is True:  # deprecated implementation?
                 goomba.state = "IDLE"
@@ -411,9 +409,7 @@ while True:  # actual main loop
         elif goomba.state == "TURN":
             goomba.turn(goomba.go)
             if (goomba.sF.distance >= s_thold) and (goomba.cliff_det() is False):
-                o = goomba.locate()  # changes state to FORWARD
-                origins.append(o)
-                send_bytes(rpi_serial, o)
+                goomba.evt_handler()
             elif start_button is True:  # deprecated implementation?
                 goomba.state = "IDLE"
                 start_button = False
