@@ -355,32 +355,35 @@ while True:  # actual main loop
                     elif packet.button == B2:
                         # some way to send origins in an organized manner?
                         print("Button 2 pressed! Data by UART WIP.")
-                        pass
+                        c_det = goomba.cliff_dist()
+                        dists = goomba.grab_sonar()
+                        encs = (goomba.encL.position, goomba.encR.position)
+                        o = [lis3.magnetic, encs, lsm6.acceleration, dists, (c_det, 0, 3)]
+                        send_bytes(rpi_serial, o)
                     elif packet.button == B3:
                         # some way to send origins in an organized manner?
                         print("Button 3 pressed! Toggled print statements.")
                         testing = not testing
 
-
         if goomba.state == "IDLE":
             goomba.idle(start_button)
             start_button = False
         elif goomba.state == "LOCATE":
-            o = goomba.locate()
+            o = goomba.locate()   # changes state to FORWARD
             origins.append(o)
             send_bytes(rpi_serial, o)
 
         if goomba.state != "IDLE":
-            if timer_time is None:
+            if timer_time is None:  # timer acts independently and does not use locate to not change state
                 timer_set()
             if timer_event() == EVENT_TIMER:
                 c_det = goomba.cliff_dist()
+                dists = goomba.grab_sonar()
+                encs = (goomba.encL.position, goomba.encR.position)
                 if goomba.state == "FORWARD":
                     comm = 1
                 if goomba.state == "TURN":
                     comm = 2
-                dists = goomba.grab_sonar()
-                encs = (goomba.encL.position, goomba.encR.position)
                 o = [lis3.magnetic, encs, lsm6.acceleration, dists, (c_det, comm, 1)]
                 send_bytes(rpi_serial, o)
 
@@ -392,12 +395,12 @@ while True:  # actual main loop
                 send_bytes(rpi_serial, o)
                 goomba.go = "RIGHT"
             elif (goomba.sR.distance <= s_thold) and (goomba.sF.distance <= s_thold):
-                o = goomba.locate()
+                o = goomba.locate()  # changes state to TURN
                 origins.append(o)
                 send_bytes(rpi_serial, o)
                 goomba.go = "LEFT"
             elif goomba.cliff_det() is True:
-                o = goomba.locate()
+                o = goomba.locate()  # changes state to TURN
                 origins.append(o)
                 send_bytes(rpi_serial, o)
                 goomba.go = "RIGHT"
@@ -408,11 +411,9 @@ while True:  # actual main loop
         elif goomba.state == "TURN":
             goomba.turn(goomba.go)
             if (goomba.sF.distance >= s_thold) and (goomba.cliff_det() is False):
-                o = goomba.locate()
+                o = goomba.locate()  # changes state to FORWARD
                 origins.append(o)
                 send_bytes(rpi_serial, o)
-                goomba.state = "FORWARD"
             elif start_button is True:  # deprecated implementation?
                 goomba.state = "IDLE"
                 start_button = False
-
