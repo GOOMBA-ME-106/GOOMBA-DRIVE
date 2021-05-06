@@ -106,8 +106,6 @@ DATA_SEND_INTERVAL = 0.3
 
 timer_time = None
 
-# TODO assign states an integer value to send w/ locate and timer
-
 
 def error(err_string):
     raise Exception(err_string)
@@ -157,14 +155,15 @@ def send_bytes(rpi, origin_data):
 
 def read_uart(rpi, numbytes=4):
     data = rpi.read(numbytes)
+    data_string = None
+    er = None
     if data is not None:
         try:
-            data_string = struct.unpack("f", data)  # rpi sends data in "f"
-            print(data_string)
+            data_string = struct.unpack("d", data)
         except Exception as e:
-            print("No data found. \nError message:", e)
-            data_string = None
-    return data_string
+            print("Error message:", e)
+            er = e
+    return (data_string, er)
 
 
 # States of state machine
@@ -195,7 +194,7 @@ class state_machine():
         if ignite is True:
             self.state = "LOCATE"
 
-    def locate(self):  # TODO indicate state/event with data
+    def locate(self):
         global dists
         thing = [(0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0)]
         thing[0] = self.magnet.magnetic
@@ -259,19 +258,20 @@ class state_machine():
             distF = 0
 
         return [distL, distF, distR]
+# TODO method to interpret signal from RPi
 
-
+# testing parameters
 testing = True
 print_time = .2
 test_q = "Y"
 
-# Main loop
+# initializing variables
 last = time.monotonic()
 origins = [[(0, 0, 0), (0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0)]]
 i = 0
 s_thold = 30  # in cm
 start_button = None
-
+# creating instance of state machine
 goomba = state_machine(motL, motR, encL, encR, lis3, lsm6, IR, sonar)
 while True:  # actual main loop
     ble.start_advertising(advertisement)
@@ -310,7 +310,7 @@ while True:  # actual main loop
 
         if RPI_CS.value is True:  # idea for signalling when to read from RPi
             print("RPi sending data!")
-            data = read_uart(rpi_serial)
+            data, er = read_uart(rpi_serial)
             print(data)
 
 
@@ -319,8 +319,30 @@ while True:  # actual main loop
             if time.monotonic() - last > print_time:
                 print(goomba.state)
                 last = time.monotonic()
-        if RPI_CS is True:
-            rpi_in = read_uart(rpi_serial)
+        if RPI_CS is True:  # initial version of read functionality
+            rpi_in, er = read_uart(rpi_serial)
+            if int(rpi_in) == 666:  # received start signal
+                state_in = read_uart(rpi_serial)
+                if state_in[0] is float:
+                    new_state = int(state_in[0])
+                    if new_state == 0:
+                        goomba.state == "IDLE"
+                    elif new_state == 1:
+                        goomba.state == "FORWARD"
+                    elif new_state == 2:
+                        goomba.state == "TURN"
+                    elif new_state == 3:
+                        goomba.state == "TURN"
+                    elif new_state == 4:
+                        goomba.state == "LOCATE"
+                    elif new_state == 5:
+                        goomba.state == "IDLE"
+                        print("\"bad\" sent from RPi. Check SendThread class")
+                    else:
+                        print("invalid state from rpi")
+                else:
+                    print("Signal interrupted from RPi")
+
         if uart.in_waiting:
             packet = Packet.from_stream(uart)
             if isinstance(packet, ButtonPacket):
@@ -338,6 +360,13 @@ while True:  # actual main loop
                         testing = not testing
 
         dists = goomba.grab_sonar()
+        encs = (goomba.encL.position, goomba.encR.position)
+
+        if goomba.state == "IDLE":
+            goomba.idle(start_button)
+            start_button = False
+        elif goomba.state == "LOCATE":
+            origins.append(goomba.locate())
 
         if goomba.state != "IDLE":
             if timer_time is None:
@@ -351,18 +380,12 @@ while True:  # actual main loop
                 origins = [lis3.magnetic, encs, lsm6.acceleration, dists, (c_det, comm, 1)]
                 send_bytes(rpi_serial, origins)
 
-        if goomba.state == "IDLE":
-            goomba.idle(start_button)
-            start_button = False
-        elif goomba.state == "LOCATE":
-            origins.append(goomba.locate())
-
         elif goomba.state == "FORWARD":
             goomba.forward()
-            if (sonarL.distance <= s_thold) and (sonarF.distance <= s_thold):
+            if (goomba.sL.distance <= s_thold) and (goomba.sF.distance <= s_thold):
                 origins.append(goomba.locate())
                 goomba.go = "RIGHT"
-            elif (sonarR.distance <= s_thold) and (sonarF.distance <= s_thold):
+            elif (goomba.sR.distance <= s_thold) and (goomba.sF.distance <= s_thold):
                 origins.append(goomba.locate())
                 goomba.go = "LEFT"
             elif goomba.cliff_det() is True:
@@ -374,14 +397,10 @@ while True:  # actual main loop
 
         elif goomba.state == "TURN":
             goomba.turn(goomba.go)
-            if (sonarF.distance >= s_thold) and (goomba.cliff_det() is False):
+            if (goomba.sF.distance >= s_thold) and (goomba.cliff_det() is False):
                 origins.append(goomba.locate())
                 goomba.state = "FORWARD"
             elif start_button is True:
                 goomba.state = "IDLE"
                 start_button = False
 
-# this state machine can take 5 events:
-# true or false input for cliffs
-# less than threshold value on any of the left front or right sonar
-# and taking some sort of reset button

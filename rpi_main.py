@@ -29,13 +29,6 @@ nRF = serial.Serial("/dev/ttyS0", 20000, timeout=0.3)
 def error(err_string):
     raise Exception(err_string)
 
-# interpret data functions moved to goomba_panel
-def new_vect(ang, dist):  # takes radians and cm for movement of goomba
-    vect = []
-    vect[0] = float(dist) * cos(ang)
-    vect[1] = float(dist) * sin(ang)
-    return vect
-
 
 def read_uart(rpi, numbytes=8):
     data = rpi.read(numbytes)
@@ -90,25 +83,5 @@ while True:
     time.sleep(1)
 
 nRF.close()
-
-
-# stand in test loop
-last_time = time.monotonic()
-blink_time = .1
-while True:
-    if time.monotonic() - last_time > blink_time:
-        last_time = time.monotonic()
-        received_data, er = read_uart(nRF)
-        if received_data is None:
-            nRF.write(bytes(str(er), "utf-8"))  # transmit data serially 
-        else:
-            pass
-    if ui.pwr_state:  # this is does not work while gui running. has to be in GUI class
-        print("on")
-    else:
-        '''
-        if goomba.pwr_state:  
-            print("on")'''
-        pass
 
     sys.exit(app.exec())  # once i close window, this exits the program
