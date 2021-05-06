@@ -54,9 +54,6 @@ PIN_ENC_R1 = board.D5
 PIN_IR = board.A2  # MUST BE analog pin
 IR = AnalogIn(PIN_IR)
 PIN_RPI_IN = MISO
-RPI_CS = digitalio.DigitalInOut(PIN_RPI_IN)
-RPI_CS.direction = digitalio.Direction.INPUT
-
 
 encL = rotaryio.IncrementalEncoder(PIN_ENC_L0, PIN_ENC_L1)
 encR = rotaryio.IncrementalEncoder(PIN_ENC_R0, PIN_ENC_R1)
@@ -69,6 +66,11 @@ sonar = [sonarL, sonarF, sonarR]
 i2c = board.I2C()
 lis3 = adafruit_lis3mdl.LIS3MDL(i2c)
 lsm6 = adafruit_lsm6ds.lsm6ds33.LSM6DS33(i2c)
+
+# UART for RPI
+rpi_serial = UART(TX, RX, baudrate=20000, timeout=0.3)
+RPI_CS = digitalio.DigitalInOut(PIN_RPI_IN)
+RPI_CS.direction = digitalio.Direction.INPUT
 
 # output pins
 PIN_MOTL0 = board.A4
@@ -116,7 +118,7 @@ def motor_level(level, mot):  # input is range of percents, -100 to 100
 
 
 def motor_test(mot1, mot2, drive_time, mag=60):
-    drive = drive_time / 2
+    drive = drive_time / 2  # for testing each direction of the motors
     motor_level(mag, mot1)
     motor_level(mag, mot2)
     time.sleep(drive)
@@ -128,7 +130,7 @@ def motor_test(mot1, mot2, drive_time, mag=60):
     time.sleep(0.1)
 
 
-# States of state machine
+# state machine class
 class state_machine():
     go = None
     start = "IDLE"
@@ -274,8 +276,7 @@ origins = [[(0, 0, 0), (0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0)]]
 i = 0
 s_thold = 25  # in cm
 start_button = None
-# UART stuff for RPI
-rpi_serial = UART(TX, RX, baudrate=20000, timeout=0.3)
+
 # creating instance of state machine
 goomba = state_machine(motL, motR, encL, encR, lis3, lsm6, IR, sonar, rpi_serial)
 while True:  # actual main loop
@@ -284,8 +285,8 @@ while True:  # actual main loop
         dists = goomba.grab_sonar()
         print("Sonar distances: {:.2f}L {:.2f}F {:.2f}R (cm)".format(*dists))
         encs = [encL.position, encR.position]
-        print('Magnetometer: {0:10.2f}X {1:10.2f}Y {2:10.2f}Z uT'.format(*lis3.magnetic))
         print('Encoders: {0:10.2f}L {1:10.2f}R pulses'.format(*encs))
+        print('Magnetometer: {0:10.2f}X {1:10.2f}Y {2:10.2f}Z uT'.format(*lis3.magnetic))
         print("Acceleration: {:.2f} {:.2f} {:.2f} m/s^2".format(*lsm6.acceleration))
         cliff = goomba.cliff_dist()
         print("Cliff distance:", cliff, "cm")
@@ -356,18 +357,16 @@ while True:  # actual main loop
             if isinstance(packet, ButtonPacket):
                 if packet.pressed:
                     if packet.button == B1:
-                        start_button = True  # may need to fix this?
+                        start_button = True
                         print("Button 1 pressed! It was a reset?!")
                     elif packet.button == B2:
-                        # some way to send origins in an organized manner?
                         print("Button 2 pressed! Data by UART WIP.")
-                        c_det = goomba.cliff_dist()
+                        c_det = goomba.cliff_dist()  # acts independently and does not use locate -> doesn't change state
                         dists = goomba.grab_sonar()
                         encs = (goomba.encL.position, goomba.encR.position)
                         o = [lis3.magnetic, encs, lsm6.acceleration, dists, (c_det, 0, 3)]
                         goomba.send_bytes(o)
                     elif packet.button == B3:
-                        # some way to send origins in an organized manner?
                         print("Button 3 pressed! Toggled print statements.")
                         testing = not testing
 
@@ -378,7 +377,7 @@ while True:  # actual main loop
             goomba.evt_handler()
 
         if goomba.state != "IDLE":
-            if timer_time is None:  # timer acts independently and does not use locate to not change state
+            if timer_time is None:  # timer acts independently and does not use locate -> doesn't change state
                 timer_set()
             if timer_event() == EVENT_TIMER:
                 c_det = goomba.cliff_dist()
@@ -402,7 +401,7 @@ while True:  # actual main loop
             elif goomba.cliff_det() is True:
                 goomba.evt_handler()
                 goomba.go = "RIGHT"
-            elif start_button is True:  # deprecated implementation?
+            elif start_button is True:  # only used by bluetooth
                 goomba.state = "IDLE"
                 start_button = False
 
@@ -410,6 +409,6 @@ while True:  # actual main loop
             goomba.turn(goomba.go)
             if (goomba.sF.distance >= s_thold) and (goomba.cliff_det() is False):
                 goomba.evt_handler()
-            elif start_button is True:  # deprecated implementation?
+            elif start_button is True:  # only used by bluetooth
                 goomba.state = "IDLE"
                 start_button = False
