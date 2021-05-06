@@ -195,12 +195,11 @@ class state_machine():
             self.state = "LOCATE"
 
     def locate(self):
-        global dists
         thing = [(0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0)]
         thing[0] = self.magnet.magnetic
         thing[1] = (self.encL.position, self.encR.position)
         thing[2] = self.accel.acceleration
-        thing[3] = dists
+        thing[3] = self.grab_sonar()
         thing[4] = (float(self.cliff_dist()), 0, 0)
         if self.state == "LOCATE":
             self.state = "FORWARD"
@@ -359,8 +358,6 @@ while True:  # actual main loop
                         print("Button 3 pressed! Toggled print statements.")
                         testing = not testing
 
-        dists = goomba.grab_sonar()
-        encs = (goomba.encL.position, goomba.encR.position)
 
         if goomba.state == "IDLE":
             goomba.idle(start_button)
@@ -377,30 +374,40 @@ while True:  # actual main loop
                     comm = 1
                 if goomba.state == "TURN":
                     comm = 2
-                origins = [lis3.magnetic, encs, lsm6.acceleration, dists, (c_det, comm, 1)]
-                send_bytes(rpi_serial, origins)
+                dists = goomba.grab_sonar()
+                encs = (goomba.encL.position, goomba.encR.position)
+                origin = [lis3.magnetic, encs, lsm6.acceleration, dists, (c_det, comm, 1)]
+                send_bytes(rpi_serial, origin)
 
         elif goomba.state == "FORWARD":
             goomba.forward()
             if (goomba.sL.distance <= s_thold) and (goomba.sF.distance <= s_thold):
-                origins.append(goomba.locate())
+                o = goomba.locate()
+                origins.append(o)
+                send_bytes(rpi_serial, o)
                 goomba.go = "RIGHT"
             elif (goomba.sR.distance <= s_thold) and (goomba.sF.distance <= s_thold):
-                origins.append(goomba.locate())
+                o = goomba.locate()
+                origins.append(o)
+                send_bytes(rpi_serial, o)
                 goomba.go = "LEFT"
             elif goomba.cliff_det() is True:
-                origins.append(goomba.locate())
+                o = goomba.locate()
+                origins.append(o)
+                send_bytes(rpi_serial, o)
                 goomba.go = "RIGHT"
-            elif start_button is True:
+            elif start_button is True:  # deprecated implementation?
                 goomba.state = "IDLE"
                 start_button = False
 
         elif goomba.state == "TURN":
             goomba.turn(goomba.go)
             if (goomba.sF.distance >= s_thold) and (goomba.cliff_det() is False):
-                origins.append(goomba.locate())
+                o = goomba.locate()
+                origins.append(o)
+                send_bytes(rpi_serial, o)
                 goomba.state = "FORWARD"
-            elif start_button is True:
+            elif start_button is True:  # deprecated implementation?
                 goomba.state = "IDLE"
                 start_button = False
 
