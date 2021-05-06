@@ -200,13 +200,16 @@ class state_machine():
         thing[1] = (self.encL.position, self.encR.position)
         thing[2] = self.accel.acceleration
         thing[3] = self.grab_sonar()
-        thing[4] = (float(self.cliff_dist()), 0, 0)
+        thing[4] = [float(self.cliff_dist()), 0, 0]
         if self.state == "LOCATE":
             self.state = "FORWARD"
             thing[4][1] = 0
+        elif self.state == "TURN":
+            self.state = "FORWARD"
+            thing[4][1] = 2
         else:
             self.state = "TURN"
-            thing[4][1] = 2
+            thing[4][1] = 1
         return thing
 
     def turn(self, direction, mag=50):
@@ -304,8 +307,8 @@ while True:  # actual main loop
                     motor_test(motL, motR, duration)
                 elif uart_test1 == "Y":
                     c_det = int(goomba.cliff_det())
-                    origins = [lis3.magnetic, encs, lsm6.acceleration, dists, (c_det, 0, 3)]
-                    send_bytes(rpi_serial, origins)
+                    o = [lis3.magnetic, encs, lsm6.acceleration, dists, (c_det, 0, 3)]
+                    send_bytes(rpi_serial, o)
 
         if RPI_CS.value is True:  # idea for signalling when to read from RPi
             print("RPi sending data!")
@@ -363,7 +366,9 @@ while True:  # actual main loop
             goomba.idle(start_button)
             start_button = False
         elif goomba.state == "LOCATE":
-            origins.append(goomba.locate())
+            o = goomba.locate()
+            origins.append(o)
+            send_bytes(rpi_serial, o)
 
         if goomba.state != "IDLE":
             if timer_time is None:
@@ -376,13 +381,13 @@ while True:  # actual main loop
                     comm = 2
                 dists = goomba.grab_sonar()
                 encs = (goomba.encL.position, goomba.encR.position)
-                origin = [lis3.magnetic, encs, lsm6.acceleration, dists, (c_det, comm, 1)]
-                send_bytes(rpi_serial, origin)
+                o = [lis3.magnetic, encs, lsm6.acceleration, dists, (c_det, comm, 1)]
+                send_bytes(rpi_serial, o)
 
         elif goomba.state == "FORWARD":
             goomba.forward()
             if (goomba.sL.distance <= s_thold) and (goomba.sF.distance <= s_thold):
-                o = goomba.locate()
+                o = goomba.locate()  # changes state to TURN
                 origins.append(o)
                 send_bytes(rpi_serial, o)
                 goomba.go = "RIGHT"
