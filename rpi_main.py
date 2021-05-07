@@ -53,7 +53,7 @@ def send_bytes(rpi, origin_data):
 # launch GUI
 app = QtWidgets.QApplication(sys.argv)
 goomba = QtWidgets.QWidget()
-ui = goomba_panel.Ui_Goomba()
+ui = goomba_panel.Ui_Goomba(nRF)
 ui.setupUi(goomba)
 goomba.show()  # TODO properly implement goomba_panel working version
 
@@ -72,7 +72,7 @@ def readAdc(channel, mosiPin):
         print("Invalid ADC Channel number, must be between [0,7]")
         return -1
 
-
+'''
 button = Button(2)
 
 while True:
@@ -82,6 +82,6 @@ while True:
         print("Released")
     time.sleep(1)
 
-nRF.close()
+nRF.close()'''
 
 sys.exit(app.exec())  # once i close window, this exits the program

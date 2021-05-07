@@ -565,12 +565,12 @@ class Ui_Goomba(object):
 
     def distance(self, enc_change0, enc_change1):
         enc_change = (enc_change0 + enc_change1) / 2
-        dist = enc_change * constant
+        dist = enc_change * (1/24)
         return dist
     
     def turn_angle(self, enc_change0, enc_change1, prior_ang=0):  # cross reference w/ magnetometer?
         enc_change = (enc_change0 + enc_change1) / 2
-        ang = enc_change * constant
+        ang = enc_change * (1/24)
         ang_rad = ang * (3.141592 / 180) + prior_ang
         return ang_rad
     
@@ -617,11 +617,8 @@ class Ui_Goomba(object):
         self.pwr.setText(_translate("Goomba", ""))
 
 
-# for reference of data sent
-origins = [(0, 12.0, 2.3), (3, 254.1, 0), (5, 6, 7), (8, 9, 10), (1, 2, 3)]
 class ReadThread(QThread):
     update_progress = pyqtSignal(list)  # need to define what kind of signal we want to send
-    worker_complete = pyqtSignal(list)
 
     def __init__(self, nRF):  # should allow us to pass arguements into class
         super().__init__()
@@ -634,28 +631,30 @@ class ReadThread(QThread):
             detect_end = 0
             while detect_start != 666:  # throws away data until it receives start
                 received, er = self.read_uart()
+                print(received[0])
                 if received is not None:
-                    detect_start = int(received)
+                    detect_start = int(received[0])
+                    print(detect_start)
                 else:
                     pass  # may want to do something w/ error later
             while detect_end != 999:  # stores data until end bit
                 received, er = self.read_uart()
                 data.append(received[0])
                 try:
-                    detect_end = int(received)
+                    detect_end = int(received[0])
                 except TypeError:
                     print("Signal lost.")
                     detect_end = 999
-            if len(data) > 2:  # if i get more than the start and end bit, transmit data
+            if len(data) > 3:  # if i get more than the start and end bit, transmit data
                 self.update_progress.emit(data)
 
     def read_uart(self, numbytes=8):
         data = self.nRF.read(numbytes)
         data_string = None
         er = None
-        if data is not None:
+        if data[0] is not None:
             try:
-                data_string = struct.unpack("d", data)
+                data_string = struct.unpack("d", data[0])
             except Exception as e:
                 print("Error message:", e)
                 er = e

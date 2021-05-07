@@ -248,6 +248,7 @@ class state_machine():
         self.origins.append(o)    # stores sensor data
         self.send_bytes(o)  # sends data
         timer_set()  # resets timer
+        print(o)
 
 
 def timer_event():
@@ -313,6 +314,7 @@ while True:  # actual main loop
                     c_det = int(goomba.cliff_det())
                     o = [lis3.magnetic, encs, lsm6.acceleration, dists, (c_det, 0, 3)]
                     goomba.send_bytes(o)
+                    print(o)
 
         if RPI_CS.value is True:  # idea for signalling when to read from RPi
             data = [0, 0, 0]
