@@ -625,7 +625,7 @@ class ReadThread(QThread):
         self.nRF = nRF
 
     def run(self):
-        while True:
+        while True:  # TODO fix this so GUI renders properly
             data = []
             detect_start = 0
             detect_end = 0
