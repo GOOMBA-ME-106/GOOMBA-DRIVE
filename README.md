@@ -28,4 +28,4 @@ PyQt5:
 - [pyqt-tools](https://pypi.org/project/pyqt5-tools/ "install pyqt tools for the designer")
 - [PyQt5](https://pypi.org/project/PyQt5/ "necessary for Raspberry Pi to desiplay GUI")
 
-**note**: on Raspberry Pi OS 5.10, the background-color will not work propoerly and will need to be [fixed](https://www.google.com/ "temp link")
+**note**: on Raspberry Pi OS 5.10, the background-color will not work propoerly when running via VSCode. To fix it, execute the file with sudo (e.g. `cd your_folder` -> `sudo python3 rpi_main.py`). If the `serial` library is not behaving as expected, follow the steps [here](https://github.com/GOOMBA-ME-106/GOOMBA-DRIVE/issues/17#issuecomment-832449065 "serial library and PyQt5 background color issue fixes")
