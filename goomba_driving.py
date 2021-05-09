@@ -37,6 +37,7 @@ from adafruit_bluefruit_connect.button_packet import ButtonPacket
  gives total of 16 pins at our disposal
 '''
 
+
 # sensor input pins
 # sensor input pins
 PIN_SON_L0 = board.D11
@@ -130,6 +131,7 @@ def motor_test(mot1, mot2, drive_time, mag=60):
     time.sleep(0.1)
 
 
+import csv
 # state machine class
 class state_machine():
     go = None
@@ -176,7 +178,14 @@ class state_machine():
         else:
             self.state = "TURN"
             thing[4][1] = 1
+        self.save_data(thing)
         return thing
+
+    def save_data(self, data_list):
+        sensor_file = open("sensor_values.csv", 'a', newline='\n'))
+        sensor_writer = csv.writer(sensor_file)
+        sensor_writer.writerow(data_list)
+        sensor_file.close()
 
     def turn(self, direction, mag=50):
         direc = str(direction).upper()
@@ -391,6 +400,7 @@ while True:  # actual main loop
                     comm = 2
                 o = [lis3.magnetic, encs, lsm6.acceleration, dists, (c_det, comm, 1)]
                 goomba.send_bytes(o)
+                goomba.save_data(o)
 
         elif goomba.state == "FORWARD":
             goomba.forward()
