@@ -666,7 +666,7 @@ class SendThread(QThread):
     update_progress = pyqtSignal(int)
     #nRF = serial.Serial("/dev/ttyS0", 15000, timeout=0.3)
 
-    def __init__(self, nRF, state="bad"):  # should allow us to pass arguements into class
+    def __init__(self, nRF, state="bad"):  # allows us to pass arguements into class
         super().__init__()
         self.nRF = nRF
         self.state = state
