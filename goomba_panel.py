@@ -438,6 +438,7 @@ class Ui_Goomba(object):
         self.retranslateUi(Goomba)
         QtCore.QMetaObject.connectSlotsByName(Goomba)
 
+        self.label_17.setText("0.0")
         self.reader = ReadThread(self.nRF)
         self.reader.start()
         self.reader.update_progress.connect(self.sensor2label)
@@ -502,23 +503,29 @@ class Ui_Goomba(object):
         # start assigning text
         try:  # in case signal lost part way through
             # TODO make this better with for loop so i don't have to specify the indivdual indexes?
-            mang = self.magnet_angle(vals[0], vals[1], vals[2])
-            self.label_12.setText(str(mang))
+            mag_packet = vals[0], vals[1], vals[2]
+            mang = self.magnet_angle(mag_packet)
+            self.label_12.setText("{:.3f}".format(mang))
 
             self.encL_now, self.encR_now = [vals[3], vals[4]]
-            encL_change = self.encL_now - self.encL_prev
-            encR_change = self.encR_now - self.encR_prev
-            self.encL_prev = self. encL_now
-            self.encR_prev = self. encR_now
+            encL_change = abs(self.encL_now - self.encL_prev)
+            encR_change = abs(self.encR_now - self.encR_prev)
+            self.encL_prev = self.encL_now
+            self.encR_prev = self.encR_now
             if int(vals[12]) == TURN: 
                 #bot is turning, angle according to encoders. may want to add additional label for this
-                self.label_12.setText(str(self.turn_angle(encL_change, encR_change)))
+                #self.label_12.setText(str(self.turn_angle(encL_change, encR_change)))
+                self.label_14.setText("Running")
             elif int(vals[12]) == FORWARD:
                 #bot is forward
-                self.label_17.setText(str(self.distance(encL_change, encR_change)))
+                old_dist = float(self.label_17.text())
+                self.label_17.setText("{:.3f}".format(self.distance(encL_change, encR_change)+old_dist))
+                self.label_14.setText("Running")
             elif int(vals[12]) == LOCATE:
                 #bot is forward
-                self.label_17.setText(str(self.distance(encL_change, encR_change)))
+                old_dist = float(self.label_17.text())
+                self.label_17.setText("{:.3f}".format(self.distance(encL_change, encR_change)+old_dist))
+                self.label_14.setText("Running")
             if int(vals[13]) == TIMER:
                 self.label_14.setText("Running")
             if int(vals[13]) == TEST:
@@ -565,7 +572,7 @@ class Ui_Goomba(object):
 
     def distance(self, enc_change0, enc_change1):
         enc_change = (enc_change0 + enc_change1) / 2
-        dist = enc_change * (1/24)
+        dist = enc_change * (1/12) * (0.01)
         return dist
     
     def turn_angle(self, enc_change0, enc_change1, prior_ang=0):  # cross reference w/ magnetometer?
@@ -625,7 +632,7 @@ class ReadThread(QThread):
         self.nRF = nRF
 
     def run(self):
-        while True:  # TODO fix this so GUI renders properly
+        while True:  # TODO fix this so GUI renders properly?
             data = []
             detect_start = 0
             detect_end = 0
@@ -709,6 +716,17 @@ class SendThread(QThread):
         self.nRF.write(struct.pack("f", 999))
         self.nRF.write(struct.pack("f", value))
         self.nRF.write(struct.pack("f", 666))
+
+
+if __name__ == "__main__":
+    import sys
+    nRF = serial.Serial("/dev/ttyS0", 20000, timeout=0.3)
+    app = QtWidgets.QApplication(sys.argv)
+    Goomba = QtWidgets.QWidget()
+    ui = Ui_Goomba(nRF)
+    ui.setupUi(Goomba)
+    Goomba.show()
+    sys.exit(app.exec())
 
 
 if __name__ == "__main__":
