@@ -631,17 +631,17 @@ class ReadThread(QThread):
             detect_end = 0
             while detect_start != 666:  # throws away data until it receives start
                 received, er = self.read_uart()
-                print(received[0])
+                print(received)
                 if received is not None:
-                    detect_start = int(received[0])
+                    detect_start = int(received)
                     print(detect_start)
                 else:
                     pass  # may want to do something w/ error later
             while detect_end != 999:  # stores data until end bit
                 received, er = self.read_uart()
-                data.append(received[0])
+                data.append(received)
                 try:
-                    detect_end = int(received[0])
+                    detect_end = int(received)
                 except TypeError:
                     print("Signal lost.")
                     detect_end = 999
