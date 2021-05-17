@@ -15,7 +15,7 @@ import digitalio
 from analogio import AnalogIn
 import rotaryio
 import time
-import struct
+import struct  # allows us easily send floats in bytes
 from busio import UART
 import adafruit_lis3mdl  # magnetometer
 import adafruit_hcsr04  # sonar sensor
@@ -27,7 +27,7 @@ from adafruit_ble.advertising.standard import ProvideServicesAdvertisement
 from adafruit_ble.services.nordic import UARTService
 
 from adafruit_bluefruit_connect.packet import Packet
-from adafruit_bluefruit_connect.button_packet import ButtonPacket
+from adafruit_bluefruit_connect.button_packet import ButtonPacket  # temp start_button
 
 '''
  we have 7 digital pins, 6 analog pins explicitly - D13, D12, D11, D10, D9, D6, D5, D2
@@ -78,6 +78,7 @@ PIN_MOTL1 = board.A5
 PIN_MOTR0 = SCK
 PIN_MOTR1 = MOSI
 
+# motor settings
 motL0 = pwmio.PWMOut(PIN_MOTL0)
 motL1 = pwmio.PWMOut(PIN_MOTL1)
 motL = motor.DCMotor(motL0, motL1)
@@ -89,6 +90,7 @@ motR.FAST_DECAY = 1
 
 DUTY_MAX = 2 ** 16 - 1
 
+# turn on bluetooth for testing and ignition
 ble = BLERadio()
 uart = UARTService()
 advertisement = ProvideServicesAdvertisement(uart)
@@ -102,6 +104,8 @@ UP = ButtonPacket.UP
 LEFT = ButtonPacket.LEFT
 RIGHT = ButtonPacket.RIGHT
 
+
+# independent timer event 
 EVENT_NONE = 0
 EVENT_TIMER = 1
 DATA_SEND_INTERVAL = 0.3
@@ -117,8 +121,8 @@ def motor_level(level, mot):  # input is range of percents, -100 to 100
     mot.throttle = float(level / 100)
 
 
-def motor_test(mot1, mot2, drive_time, mag=60):
-    drive = drive_time / 2  # for testing each direction of the motors
+def motor_test(mot1, mot2, drive_time, mag=60):  # for testing each direction of the motors
+    drive = drive_time / 2
     motor_level(mag, mot1)
     motor_level(mag, mot2)
     time.sleep(drive)
@@ -132,7 +136,7 @@ def motor_test(mot1, mot2, drive_time, mag=60):
 
 # state machine class
 class state_machine():
-    go = None
+    go = None  # indicates direction for turning
     start = "IDLE"
     origins = []
 
@@ -160,7 +164,7 @@ class state_machine():
         if ignite is True:
             self.state = "LOCATE"
 
-    def locate(self):
+    def locate(self):  # formats sensor data to be sent & changes state
         thing = [(0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0)]
         thing[0] = self.magnet.magnetic
         thing[1] = (self.encL.position, self.encR.position)
@@ -198,17 +202,17 @@ class state_machine():
             time.sleep(0.05)
             return "-1"
 
-    def cliff_det(self):
+    def cliff_det(self, thresh=20):  # for cliff event
         dist = self.cliff_dist()
         try:
-            if dist >= 20:
+            if dist >= thresh:
                 return True
             else:
                 return False
         except TypeError:
             return True
 
-    def grab_sonar(self):
+    def grab_sonar(self):  # to handle faulty sonar connections
         try:
             distL = self.sL.distance
         except Exception:
@@ -226,7 +230,7 @@ class state_machine():
             distF = 0
         return [distL, distF, distR]
 
-    def send_bytes(self, origin_data):
+    def send_bytes(self, origin_data):  # communication via UART
         for count0, d_list in enumerate(origin_data):
             for value in d_list:
                 self.serial.write(bytes(struct.pack("d", float(value))))  # use struct.unpack to get float back
@@ -237,7 +241,7 @@ class state_machine():
         er = None
         if data is not None:
             try:
-                data_string = struct.unpack("d", data)
+                data_string = struct.unpack("f", data)
             except Exception as e:
                 print("Error message:", e)
                 er = e
@@ -363,8 +367,8 @@ while True:  # actual main loop
                         print("Button 1 pressed! It was a reset?!")
                     elif packet.button == B2:
                         print("Button 2 pressed! Data by UART WIP.")
-                        c_det = goomba.cliff_dist()  # acts independently and does not use locate -> doesn't change state
-                        dists = goomba.grab_sonar()
+                        c_det = goomba.cliff_dist()  # acts independently and doesn't use locate -> doesn't change state
+                        dists = goomba.grab_sonar()  # could modify locate to handle timer event
                         encs = (goomba.encL.position, goomba.encR.position)
                         o = [lis3.magnetic, encs, lsm6.acceleration, dists, (c_det, 0, 3)]
                         goomba.send_bytes(o)
