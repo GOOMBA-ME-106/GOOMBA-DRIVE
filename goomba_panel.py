@@ -55,7 +55,6 @@ class Ui_Goomba(object):
     def __init__(self, nRF):  # should allow us to pass arguements into class
         super().__init__()
         self.nRF = nRF
-        self.custom()
 
     def setupUi(self, Goomba):
         Goomba.setObjectName("Goomba")
@@ -438,6 +437,7 @@ class Ui_Goomba(object):
 
         self.retranslateUi(Goomba)
         QtCore.QMetaObject.connectSlotsByName(Goomba)
+        self.custom()
 
     def custom(self):  # stuff to execute after building gui
         self.label_17.setText("0.0")
@@ -658,7 +658,7 @@ class ReadThread(QThread):
                 received, er = self.read_uart()
                 print(received)
                 if received is not None:
-                    detect_start = int(received)
+                    detect_start = int(received[0])
                     print(detect_start)
                 else:
                     pass  # may want to do something w/ error later
@@ -666,7 +666,7 @@ class ReadThread(QThread):
                 received, er = self.read_uart()
                 data.append(received)
                 try:
-                    detect_end = int(received)
+                    detect_end = int(received[0]) 
                 except TypeError:
                     print("Signal lost.")
                     detect_end = 999
@@ -677,9 +677,9 @@ class ReadThread(QThread):
         data = self.nRF.read(numbytes)
         data_string = None
         er = None
-        if data[0] is not None:
+        if data is not None:
             try:
-                data_string = struct.unpack("d", data[0])
+                data_string = struct.unpack("d", data)
             except Exception as e:
                 print("Error message:", e)
                 er = e
@@ -738,21 +738,10 @@ class SendThread(QThread):
 
 if __name__ == "__main__":
     import sys
-    nRF = serial.Serial("/dev/ttyS0", 20000, timeout=0.3)
+    nRF = serial.Serial("/dev/ttyS0", 10000, timeout=0.3)
     app = QtWidgets.QApplication(sys.argv)
     Goomba = QtWidgets.QWidget()
     ui = Ui_Goomba(nRF)
     ui.setupUi(Goomba)
     Goomba.show()
-    sys.exit(app.exec())
-
-
-if __name__ == "__main__":
-    import sys
-    nRF = serial.Serial("/dev/ttyS0", 20000, timeout=0.3)
-    app = QtWidgets.QApplication(sys.argv)
-    Goomba = QtWidgets.QWidget()
-    ui = Ui_Goomba(nRF)
-    ui.setupUi(Goomba)
-    Goomba.show()
-    sys.exit(app.exec())
+    sys.exit(app.exec_())
