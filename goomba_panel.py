@@ -475,7 +475,7 @@ class Ui_Goomba(object):
     def toggle(self):  # on pwr button click this is called
         if self.last is False:
             self.label_14.setText("Running")
-            pwr_style = self.run  # TODO integrate with sender class
+            pwr_style = self.run  # TODO integrate with sensor2label
             self.pwr_state = True  # gives go signal to bot
         elif self.last is True:
             self.label_14.setText("Paused")
@@ -516,20 +516,36 @@ class Ui_Goomba(object):
                 #bot is turning, angle according to encoders. may want to add additional label for this
                 #self.label_12.setText(str(self.turn_angle(encL_change, encR_change)))
                 self.label_14.setText("Running")
+                self.pwr_state = True  # to update pwr_btn
+                self.last = False
+                self.pwr.setStyleSheet(self.run)
             elif int(vals[12]) == FORWARD:
                 #bot is forward
                 old_dist = float(self.label_17.text())
                 self.label_17.setText("{:.3f}".format(self.distance(encL_change, encR_change)+old_dist))
                 self.label_14.setText("Running")
+                self.pwr_state = True  # to update pwr_btn
+                self.last = False
+                self.pwr.setStyleSheet(self.run)
             elif int(vals[12]) == LOCATE:
                 #bot is forward
                 old_dist = float(self.label_17.text())
                 self.label_17.setText("{:.3f}".format(self.distance(encL_change, encR_change)+old_dist))
                 self.label_14.setText("Running")
+                self.pwr_state = True  # to update pwr_btn
+                self.last = False
+                self.pwr.setStyleSheet(self.run)
             if int(vals[13]) == TIMER:
                 self.label_14.setText("Running")
+                self.pwr_state = True  # to update pwr_btn
+                self.last = False
+                self.pwr.setStyleSheet(self.run)
             if int(vals[13]) == TEST:
                 self.label_14.setText("UART Test successful!")
+                self.pwr_state = False  # to update pwr_btn
+                self.last = True
+                self.pwr.setStyleSheet(self.pwr_idle)
+                self.pwr.setIcon(QIcon(self.radar_icon))
 
             x, y, z = (vals[5], vals[6], vals[7])
             if x > (9.81 * 0.75):  # TODO eventually store and sort data based on the accleromter data
