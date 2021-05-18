@@ -55,6 +55,7 @@ class Ui_Goomba(object):
     def __init__(self, nRF):  # should allow us to pass arguements into class
         super().__init__()
         self.nRF = nRF
+        self.custom()
 
     def setupUi(self, Goomba):
         Goomba.setObjectName("Goomba")
@@ -374,7 +375,7 @@ class Ui_Goomba(object):
         font.setPointSize(12)
         self.listWidget.setFont(font)
         self.listWidget.setStyleSheet("color:rgb(236, 240, 241);\n"
-"background-color:rgba(70,113,156,156)")
+        "background-color:rgba(70,113,156,156)")
         self.listWidget.setObjectName("listWidget")
         item = QtWidgets.QListWidgetItem()
         self.listWidget.addItem(item)
@@ -438,6 +439,7 @@ class Ui_Goomba(object):
         self.retranslateUi(Goomba)
         QtCore.QMetaObject.connectSlotsByName(Goomba)
 
+    def custom(self):  # stuff to execute after building gui
         self.label_17.setText("0.0")
         self.reader = ReadThread(self.nRF)
         self.reader.start()
