@@ -84,4 +84,4 @@ while True:
 
 nRF.close()'''
 
-sys.exit(app.exec())  # once i close window, this exits the program
+sys.exit(app.exec_())  # once i close window, this exits the program
