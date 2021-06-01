@@ -739,6 +739,7 @@ class SendThread(QThread):
 if __name__ == "__main__":
     import sys
     nRF = serial.Serial("/dev/ttyS0", 10000, timeout=0.3)
+    #nRF = serial.Serial("/dev/ttyACM0", 10000, timeout=0.3)
     app = QtWidgets.QApplication(sys.argv)
     Goomba = QtWidgets.QWidget()
     ui = Ui_Goomba(nRF)
