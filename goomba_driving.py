@@ -6,7 +6,7 @@
 #   v0.90 26-Mar-2021 Initial version of state machine to handle 5 events. ~Needs to finish sensor handling~
 #   v0.91 11-Apr-2021 Added sharp-gp2y0a21yk0f cliff sensor functionality and bluetooth
 #   v1.00 29-Apr-2021 QoL updates for testing, fixed data reording, final pin assignments, working state machine
-#   v1.01 29-Apr-2021 Prep for RPi
+#   v1.01 29-Apr-2021 Prep for RPi - USB serial communication?
 
 import board
 from board import SCL, SDA, SCK, MOSI, MISO, RX, TX
@@ -37,7 +37,6 @@ from adafruit_bluefruit_connect.button_packet import ButtonPacket  # temp start_
  gives total of 16 pins at our disposal
 '''
 
-# sensor input pins
 # sensor input pins
 PIN_SON_L0 = board.D11
 PIN_SON_L1 = board.D10
@@ -139,6 +138,7 @@ class state_machine():
     go = None  # indicates direction for turning
     start = "IDLE"
     origins = []
+    test = False
 
     def __init__(self, motL, motR, encL, encR, magneto, accel, cliff, sonar, rpi_serial):
         self.state = self.start
@@ -157,6 +157,8 @@ class state_machine():
     def forward(self, speed=70):
         motor_level(speed, self.mot1)
         motor_level(speed, self.mot2)
+        if self.test:
+            self.test_print()
 
     def idle(self, ignite):
         motor_level(0, self.mot1)
@@ -252,7 +254,17 @@ class state_machine():
         self.origins.append(o)    # stores sensor data
         self.send_bytes(o)  # sends data
         timer_set()  # resets timer
-        print(o)
+        if testing:
+            print(o)
+    
+    def test_print(self):
+        print("Sonar distances:{0:10.2f}L {1:10.2f}F {2:10.2f}R (cm)".format(*self.grab_sonar()))
+        encs = [self.encL.position, self.encR.position]
+        print('Encoders:      {0:10.2f}L {1:10.2f}R pulses'.format(*encs))
+        print('Magnetometer:  {0:10.2f}X {1:10.2f}Y {2:10.2f}Z uT'.format(*lis3.magnetic))
+        print("Acceleration:  {0:10.2f} {1:10.2f} {2:10.2f} m/s^2".format(*lsm6.acceleration))
+        print("Cliff distance:  ", self.cliff_dist(), "cm")
+        print("Cliff?         ", self.cliff_det())
 
 
 def timer_event():
@@ -272,7 +284,7 @@ def timer_set():
 
 # testing parameters
 testing = True
-print_time = .2
+print_time = .5
 test_q = "Y"
 
 # initializing variables
@@ -284,18 +296,15 @@ start_button = None
 
 # creating instance of state machine
 goomba = state_machine(motL, motR, encL, encR, lis3, lsm6, IR, sonar, rpi_serial)
+if testing:
+    goomba.test = True
 while True:  # actual main loop
     ble.start_advertising(advertisement)
     while not ble.connected:  # for testing while connected
+        goomba.test_print()
         dists = goomba.grab_sonar()
-        print("Sonar distances: {:.2f}L {:.2f}F {:.2f}R (cm)".format(*dists))
         encs = [encL.position, encR.position]
-        print('Encoders: {0:10.2f}L {1:10.2f}R pulses'.format(*encs))
-        print('Magnetometer: {0:10.2f}X {1:10.2f}Y {2:10.2f}Z uT'.format(*lis3.magnetic))
-        print("Acceleration: {:.2f} {:.2f} {:.2f} m/s^2".format(*lsm6.acceleration))
         cliff = goomba.cliff_dist()
-        print("Cliff distance:", cliff, "cm")
-        print("Cliff?", goomba.cliff_det(), "cm")
 
         time.sleep(print_time)
         if test_q != "SKIP":
@@ -334,6 +343,7 @@ while True:  # actual main loop
             if time.monotonic() - last > print_time:
                 print(goomba.state)
                 last = time.monotonic()
+                goomba.test_print()
         if RPI_CS is True:  # initial version of read functionality
             rpi_in, er = goomba.read_uart()
             if int(rpi_in) == 666:  # received start signal

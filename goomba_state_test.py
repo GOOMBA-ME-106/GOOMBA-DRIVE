@@ -110,9 +110,6 @@ def motor_level(level, mot):  # input is range of percents, -100 to 100
     mot.throttle = float(level/100)
 
 
-
-
-
 def send_bytes(origin_data, rpi):
     for count0, d_list in enumerate(origin_data):
         for value in d_list:
@@ -127,39 +124,6 @@ def read_uart(numbytes, rpi):
             print(data_string)
         except Exception as e:
             print("No data found. \nError message:", e)
-
-
-# functions for RPi to interpret data?
-def vector_2_degrees(self, x, y):
-    angle = degrees(atan2(y, x))
-    if angle < 0:
-        angle += 360
-    return angle
-
-
-def magnet_angle(packets):
-    magnet_x, magnet_y, _ = packets
-    return vector_2_degrees(magnet_x, magnet_y)
-
-
-def distance(enc_change0, enc_change1):
-    enc_change = (enc_change0 + enc_change1)/2
-    dist = enc_change * constant
-    return dist
-
-
-def angle(enc_change0, enc_change1, prior_ang=0):  # cross reference w/ magnetometer?
-    enc_change = (enc_change0 + enc_change1)/2
-    ang = enc_change * constant
-    ang_rad = ang * (3.141592/180) + prior_ang
-    return ang_rad
-
-
-def new_vect(ang, dist):  # takes radians and cm for movement of goomba
-    vect = []
-    vect[0] = float(dist) * cos(ang)
-    vect[1] = float(dist) * sin(ang)
-    return vect
 
 
 # States of state machine
