@@ -379,6 +379,8 @@ while True:  # actual main loop
                     elif packet.button == B3:
                         print("Button 3 pressed! Toggled print statements.")
                         testing = not testing
+                        testing2 = not testing2
+                        goomba.test = not goomba.test
 
         if goomba.state == "IDLE":
             goomba.idle(start_button)
@@ -396,7 +398,12 @@ while True:  # actual main loop
                 if goomba.state == "FORWARD":
                     comm = 1
                 if goomba.state == "TURN":
-                    comm = 2
+                    if goomba.go == "LEFT":
+                        comm = 2
+                    elif goomba.go == "RIGHT":
+                        comm = 3
+                    else:
+                        comm = 9  # error integer
                 o = [lis3.magnetic, encs, lsm6.acceleration, dists, (c_det, comm, 1)]
                 goomba.send_bytes(o)
 
