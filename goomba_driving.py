@@ -104,14 +104,6 @@ LEFT = ButtonPacket.LEFT
 RIGHT = ButtonPacket.RIGHT
 
 
-# independent timer event 
-EVENT_NONE = 0
-EVENT_TIMER = 1
-DATA_SEND_INTERVAL = 0.3
-
-timer_time = None
-
-
 def error(err_string):
     raise Exception(err_string)
 
@@ -139,6 +131,11 @@ class state_machine():
     start = "IDLE"
     origins = []
     test = False
+    # independent timer event 
+    EVENT_NONE = 0
+    EVENT_TIMER = 1
+    DATA_SEND_INTERVAL = 0.3
+    timer_time = None
 
     def __init__(self, motL, motR, encL, encR, magneto, accel, cliff, sonar, rpi_serial):
         self.state = self.start
@@ -157,8 +154,6 @@ class state_machine():
     def forward(self, speed=70):
         motor_level(speed, self.mot1)
         motor_level(speed, self.mot2)
-        if self.test:
-            self.test_print()
 
     def idle(self, ignite):
         motor_level(0, self.mot1)
@@ -248,13 +243,23 @@ class state_machine():
                 print("Error message:", e)
                 er = e
         return (data_string, er)
-    
+        
+    def timer_event(self):
+        if (self.timer_time is not None) and time.monotonic() >= self.timer_time:
+            self.timer_time = None
+            return self.EVENT_TIMER
+        else:
+            return self.EVENT_NONE
+
+    def timer_set(self):
+        self.timer_time = time.monotonic() + self.DATA_SEND_INTERVAL
+
     def evt_handler(self):
         o = self.locate()  # changes state and grabs sensor data
-        self.origins.append(o)    # stores sensor data
+        self.origins.append(o)  # stores sensor data
         self.send_bytes(o)  # sends data
-        timer_set()  # resets timer
-        if testing:
+        self.timer_set()  # resets timer
+        if self.test:
             print(o)
     
     def test_print(self):
@@ -267,23 +272,9 @@ class state_machine():
         print("Cliff?         ", self.cliff_det())
 
 
-def timer_event():
-    global timer_time
-
-    if (timer_time is not None) and time.monotonic() >= timer_time:
-        timer_time = None
-        return EVENT_TIMER
-    else:
-        return EVENT_NONE
-
-
-def timer_set():
-    global timer_time
-    timer_time = time.monotonic() + DATA_SEND_INTERVAL
-
-
 # testing parameters
-testing = True
+testing = True  # to show state
+testing2 = False  # to show sensor data
 print_time = .5
 test_q = "Y"
 
@@ -343,7 +334,10 @@ while True:  # actual main loop
             if time.monotonic() - last > print_time:
                 print(goomba.state)
                 last = time.monotonic()
-                goomba.test_print()
+                if testing2:
+                    goomba.test_print()
+                if goomba.state == "TURN":
+                    print(goomba.go)
         if RPI_CS is True:  # initial version of read functionality
             rpi_in, er = goomba.read_uart()
             if int(rpi_in) == 666:  # received start signal
@@ -393,9 +387,9 @@ while True:  # actual main loop
             goomba.evt_handler()
 
         if goomba.state != "IDLE":
-            if timer_time is None:  # timer acts independently and does not use locate -> doesn't change state
-                timer_set()
-            if timer_event() == EVENT_TIMER:
+            if goomba.timer_time is None:  # timer acts independently and does not use locate -> doesn't change state
+                goomba.timer_set()
+            if goomba.timer_event() == goomba.EVENT_TIMER:
                 c_det = goomba.cliff_dist()
                 dists = goomba.grab_sonar()
                 encs = (goomba.encL.position, goomba.encR.position)
@@ -406,12 +400,16 @@ while True:  # actual main loop
                 o = [lis3.magnetic, encs, lsm6.acceleration, dists, (c_det, comm, 1)]
                 goomba.send_bytes(o)
 
-        elif goomba.state == "FORWARD":
+        if goomba.state == "FORWARD":
             goomba.forward()
-            if (goomba.sL.distance <= s_thold) and (goomba.sF.distance <= s_thold):
+            distL, distF, distR = goomba.grab_sonar()
+            if (distF <= s_thold):
                 goomba.evt_handler()
                 goomba.go = "RIGHT"
-            elif (goomba.sR.distance <= s_thold) and (goomba.sF.distance <= s_thold):
+            elif (distL <= s_thold) and (distF <= s_thold):
+                goomba.evt_handler()
+                goomba.go = "RIGHT"
+            elif (distR <= s_thold) and (distF <= s_thold):
                 goomba.evt_handler()
                 goomba.go = "LEFT"
             elif goomba.cliff_det() is True:
@@ -421,9 +419,10 @@ while True:  # actual main loop
                 goomba.state = "IDLE"
                 start_button = False
 
-        elif goomba.state == "TURN":
+        if goomba.state == "TURN":
             goomba.turn(goomba.go)
-            if (goomba.sF.distance >= s_thold) and (goomba.cliff_det() is False):
+            distL, distF, distR = goomba.grab_sonar()
+            if (distF >= s_thold) and (goomba.cliff_det() is False):
                 goomba.evt_handler()
             elif start_button is True:  # only used by bluetooth
                 goomba.state = "IDLE"

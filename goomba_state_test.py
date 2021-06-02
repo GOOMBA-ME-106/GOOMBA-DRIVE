@@ -300,6 +300,7 @@ while True:  # actual main loop
                         pass
                     else:
                         start_button = False
+                        
         dists = goomba.grab_sonar()
         if goomba.state == "IDLE":
             goomba.idle(start_button)
