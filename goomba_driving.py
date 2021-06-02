@@ -168,18 +168,23 @@ class state_machine():
         thing[2] = self.accel.acceleration
         thing[3] = self.grab_sonar()
         thing[4] = [float(self.cliff_dist()), 0, 0]
-        if self.state == "LOCATE":  # TODO mod this to make universal method for timer event. maybe take input for when there's a timer event
+        if self.state == "LOCATE":  # TODO mod this to make universal method for timer event. take input for timer event
             self.state = "FORWARD"
             thing[4][1] = 0
         elif self.state == "TURN":
             self.state = "FORWARD"
-            thing[4][1] = 2
-        else:
+            if goomba.go == "LEFT":
+                thing[4][1] = 2
+            elif goomba.go == "RIGHT":
+                thing[4][1] = 3
+            else:
+                thing[4][1] = 9  # error integer
+        elif self.state == "FORWARD":
             self.state = "TURN"
             thing[4][1] = 1
         return thing
 
-    def turn(self, direction, mag=50):
+    def turn(self, direction, mag=60):
         direc = str(direction).upper()
         if direc == "LEFT":
             motor_level(mag, motL)
@@ -321,7 +326,7 @@ while True:  # actual main loop
                     print(o)
 
         if RPI_CS.value is True:  # idea for signalling when to read from RPi
-            data = []
+            data = []  # make this into a function?
             er = []
             data_in = None
             print("RPi sending data!")
@@ -339,8 +344,6 @@ while True:  # actual main loop
             if time.monotonic() - last > print_time:
                 print(goomba.state)
                 last = time.monotonic()
-                if testing2:
-                    goomba.test_print()
                 if goomba.state == "TURN":
                     print(goomba.go)
         if RPI_CS is True:  # initial version of read functionality
@@ -355,8 +358,10 @@ while True:  # actual main loop
                         goomba.state == "FORWARD"
                     elif new_state == 2:
                         goomba.state == "TURN"
+                        goomba.go == "RIGHT"
                     elif new_state == 3:
                         goomba.state == "TURN"
+                        goomba.go == "LEFT"
                     elif new_state == 4:
                         goomba.state == "LOCATE"
                     elif new_state == 5:
@@ -364,6 +369,7 @@ while True:  # actual main loop
                         print("\"bad\" sent from RPi. Check SendThread class")
                     else:
                         print("Invalid state from RPi")
+                        goomba.state == "IDLE"
                 else:
                     print("Signal interrupted from RPi")
 
@@ -411,6 +417,8 @@ while True:  # actual main loop
                         comm = 9  # error integer
                 o = [lis3.magnetic, encs, lsm6.acceleration, dists, (c_det, comm, 1)]
                 goomba.send_bytes(o)
+                if testing2:
+                    goomba.test_print()
 
         if goomba.state == "FORWARD":
             goomba.forward()
