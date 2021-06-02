@@ -132,10 +132,16 @@ class state_machine():
     origins = []
     test = False
     # independent timer event 
-    EVENT_NONE = 0
-    EVENT_TIMER = 1
     DATA_SEND_INTERVAL = 0.3
     timer_time = None
+    # states
+    LOCATE = 0
+    FORWARD = 1
+    TURN_LEFT = 2
+    TURN_RIGHT = 3
+    TEST = 4
+    BAD_DIRECTION = 9
+    TIMER = 1
 
     def __init__(self, motL, motR, encL, encR, magneto, accel, cliff, sonar, rpi_serial):
         self.state = self.start
@@ -155,35 +161,58 @@ class state_machine():
         motor_level(speed, self.mot1)
         motor_level(speed, self.mot2)
 
-    def idle(self, ignite):  # may want to change how idle is handled, consolidate to locate
-        motor_level(0, self.mot1)
-        motor_level(0, self.mot2)
-        if ignite is True:
-            self.state = "LOCATE"
-
-    def locate(self):  # formats sensor data to be sent & changes state
+    def locate(self, timer, ignite):  # formats sensor data to be sent & changes state
         thing = [(0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0)]
         thing[0] = self.magnet.magnetic
         thing[1] = (self.encL.position, self.encR.position)
         thing[2] = self.accel.acceleration
         thing[3] = self.grab_sonar()
         thing[4] = [float(self.cliff_dist()), 0, 0]
-        if self.state == "LOCATE":  # TODO mod this to make universal method for timer event. take input for timer event
+        if timer:
+            comm, tim = self.get_state()
+        elif timer is not True:
+            comm, tim = self.state_change(ignite)
+        else:
+            error("State change handled incorrectly")
+        thing[4][1] = comm
+        thing[4][2] = tim
+        return thing
+    
+    def get_state(self):
+        if self.state == "LOCATE":
+            return (self.LOCATE, 1)
+        elif self.state == "TURN":
+            if goomba.go == "LEFT":
+                return (self.TURN_LEFT, 1)
+            elif goomba.go == "RIGHT":
+                return (self.TURN_RIGHT, 1)
+            else:
+                error("Locate state change handled incorrectly")
+                return (self.BAD_DIRECTION, 1)  # error integer
+        elif self.state == "FORWARD":
+            return (self.FORWARD, 1)
+
+    def state_change(self, ignite):
+        if (ignite is True) and (self.state == "IDLE"):
+            self.state = "LOCATE"
+        elif (ignite is True) and (self.state != "IDLE"):
+            self.state = "IDLE"
+        if self.state == "LOCATE":
             self.state = "FORWARD"
-            thing[4][1] = 0
+            return (self.LOCATE, 0)
         elif self.state == "TURN":
             self.state = "FORWARD"
             if goomba.go == "LEFT":
-                thing[4][1] = 2
+                return (self.TURN_LEFT, 0)
             elif goomba.go == "RIGHT":
-                thing[4][1] = 3
+                return (self.TURN_RIGHT, 0)
             else:
-                thing[4][1] = 9  # error integer
+                error("Turn state change handled incorrectly")
+                return (self.BAD_DIRECTION, 0)  # error integer
         elif self.state == "FORWARD":
             self.state = "TURN"
-            thing[4][1] = 1
-        return thing
-
+            return (self.FORWARD, 0)
+        
     def turn(self, direction, mag=60):
         direc = str(direction).upper()
         if direc == "LEFT":
@@ -252,19 +281,22 @@ class state_machine():
     def timer_event(self):
         if (self.timer_time is not None) and time.monotonic() >= self.timer_time:
             self.timer_time = None
-            return self.EVENT_TIMER
+            self.evt_handler(timer=True)
+            if self.test:
+                print(goomba.state)
+            return True
         else:
-            return self.EVENT_NONE
+            return False
 
     def timer_set(self):
         self.timer_time = time.monotonic() + self.DATA_SEND_INTERVAL
 
-    def evt_handler(self):
-        o = self.locate()  # changes state and grabs sensor data
-        self.origins.append(o)  # stores sensor data
+    def evt_handler(self, timer=False, ignite=False):
+        o = self.locate(timer, ignite)  # changes state and grabs sensor data
+        #self.origins.append(o)  # stores sensor data
         self.send_bytes(o)  # sends data
         self.timer_set()  # resets timer
-        if self.test:
+        if testing2:
             print(o)
     
     def test_print(self):
@@ -342,10 +374,11 @@ while True:  # actual main loop
     while ble.connected:
         if testing:
             if time.monotonic() - last > print_time:
-                print(goomba.state)
                 last = time.monotonic()
                 if goomba.state == "TURN":
                     print(goomba.go)
+                if testing2:
+                    goomba.test_print()
         if RPI_CS is True:  # initial version of read functionality
             rpi_in, er = goomba.read_uart()
             if int(rpi_in) == 666:  # received start signal
@@ -389,53 +422,42 @@ while True:  # actual main loop
                         goomba.send_bytes(o)
                     elif packet.button == B3:
                         print("Button 3 pressed! Toggled print statements.")
-                        testing = not testing
-                        testing2 = not testing2
+                        testing = not testing  # fully disables state w/ data
+                        testing2 = testing
+                        goomba.test = not goomba.test
+                    elif packet.button == B4:
+                        print("Button 4 pressed! Toggled print statements v2.")
+                        testing = not testing  # alternates state and data
+                        testing2 = not testing
                         goomba.test = not goomba.test
 
         if goomba.state == "IDLE":
-            goomba.idle(start_button)
+            goomba.forward(speed=0)
+            if start_button:
+                goomba.evt_handler(ignite=start_button)
             start_button = False
-        elif goomba.state == "LOCATE":
-            goomba.evt_handler()
 
         if goomba.state != "IDLE":
             if goomba.timer_time is None:  # timer acts independently and does not use locate -> doesn't change state
                 goomba.timer_set()
-            if goomba.timer_event() == goomba.EVENT_TIMER:
-                c_det = goomba.cliff_dist()
-                dists = goomba.grab_sonar()
-                encs = (goomba.encL.position, goomba.encR.position)
-                if goomba.state == "FORWARD":
-                    comm = 1
-                if goomba.state == "TURN":
-                    if goomba.go == "LEFT":
-                        comm = 2
-                    elif goomba.go == "RIGHT":
-                        comm = 3
-                    else:
-                        comm = 9  # error integer
-                o = [lis3.magnetic, encs, lsm6.acceleration, dists, (c_det, comm, 1)]
-                goomba.send_bytes(o)
-                if testing2:
-                    goomba.test_print()
+            goomba.timer_event()
 
         if goomba.state == "FORWARD":
             goomba.forward()
             distL, distF, distR = goomba.grab_sonar()
-            if (distF <= s_thold):
+            if (distR <= s_thold) and (distF <= s_thold):
                 goomba.evt_handler()
-                goomba.go = "RIGHT"
+                goomba.go = "LEFT"
             elif (distL <= s_thold) and (distF <= s_thold):
                 goomba.evt_handler()
                 goomba.go = "RIGHT"
-            elif (distR <= s_thold) and (distF <= s_thold):
-                goomba.evt_handler()
-                goomba.go = "LEFT"
-            elif goomba.cliff_det() is True:
+            elif (distF <= s_thold):
                 goomba.evt_handler()
                 goomba.go = "RIGHT"
-            elif start_button is True:  # only used by bluetooth
+            if goomba.cliff_det() is True:
+                goomba.evt_handler()
+                goomba.go = "RIGHT"
+            if start_button is True:  # only used by bluetooth
                 goomba.state = "IDLE"
                 start_button = False
 
