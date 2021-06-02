@@ -52,7 +52,6 @@ PIN_ENC_R1 = board.D5
 
 PIN_IR = board.A2  # MUST BE analog pin
 IR = AnalogIn(PIN_IR)
-PIN_RPI_IN = MISO
 
 encL = rotaryio.IncrementalEncoder(PIN_ENC_L0, PIN_ENC_L1)
 encR = rotaryio.IncrementalEncoder(PIN_ENC_R0, PIN_ENC_R1)
@@ -68,6 +67,7 @@ lsm6 = adafruit_lsm6ds.lsm6ds33.LSM6DS33(i2c)
 
 # UART for RPI
 rpi_serial = UART(TX, RX, baudrate=20000, timeout=0.3)
+PIN_RPI_IN = MISO
 RPI_CS = digitalio.DigitalInOut(PIN_RPI_IN)
 RPI_CS.direction = digitalio.Direction.INPUT
 
