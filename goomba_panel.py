@@ -20,10 +20,7 @@ import serial
 import struct
 from math import cos, sin, atan2, degrees
 
-import gpiozero  # may need this for D.OUT
-from gpiozero import Button
-import RPi.GPIO as GPIO
-# may want to change buttons under list to a label to indicate state
+from gpiozero import LED  # for chip select operation
 
 
 class Ui_Goomba(object):
@@ -52,9 +49,10 @@ class Ui_Goomba(object):
     ang_prev = 0
     ang_now = 0
     
-    def __init__(self, nRF):  # should allow us to pass arguements into class
+    def __init__(self, nRF, CS):  # should allow us to pass arguements into class
         super().__init__()
         self.nRF = nRF
+        self.CS = CS
 
     def setupUi(self, Goomba):
         Goomba.setObjectName("Goomba")
@@ -444,7 +442,7 @@ class Ui_Goomba(object):
         self.reader = ReadThread(self.nRF)
         self.reader.start()
         self.reader.update_progress.connect(self.sensor2label)
-        self.sender = SendThread(self.nRF)
+        self.sender = SendThread(self.nRF, self.CS)
 
         self.pwr.clicked.connect(self.toggle)
         self.buttonBox.clicked.connect(self.list_btn_clicked)
@@ -499,8 +497,10 @@ class Ui_Goomba(object):
         end = 666
         LOCATE = 0
         FORWARD = 1
-        TURN = 2
-        TEST = 3
+        TURN_LEFT = 2
+        TURN_RIGHT = 3
+        TEST = 4
+        BAD_DIRECTION = 9
         TIMER = 1
         # start assigning text
         try:  # in case signal lost part way through
@@ -514,7 +514,7 @@ class Ui_Goomba(object):
             encR_change = abs(self.encR_now - self.encR_prev)
             self.encL_prev = self.encL_now
             self.encR_prev = self.encR_now
-            if int(vals[12]) == TURN: 
+            if int(vals[12]) == TURN_LEFT or int(vals[12]) == TURN_RIGHT: 
                 #bot is turning, angle according to encoders. may want to add additional label for this
                 #self.label_12.setText(str(self.turn_angle(encL_change, encR_change)))
                 self.label_14.setText("Running")
@@ -691,15 +691,17 @@ class SendThread(QThread):
     update_progress = pyqtSignal(int)
     #nRF = serial.Serial("/dev/ttyS0", 15000, timeout=0.3)
 
-    def __init__(self, nRF, state="bad"):  # allows us to pass arguements into class
+    def __init__(self, nRF, CS, state="BAD"):  # allows us to pass arguements into class
         super().__init__()
         self.nRF = nRF
         self.state = state
+        self.CS_OUT = CS
 
     def run(self):  # TODO take button presh to send state change to nRF
         # take a value to indicate which state to send
         # turn GPIO digital out high
         self.update_progress.emit(1)
+        self.CS_OUT.on()
         if self.state == "Idle":
             val = 0
         elif (self.state == "Forward"): 
@@ -710,13 +712,14 @@ class SendThread(QThread):
             val = 3
         elif self.state == "Locate":
             val = 4
-        elif self.state == "bad":
+        elif self.state == "BAD":
             val = 5
             print("Did not pass in new state")
         else:  # error case
             val = 5
         self.send_bytes(val)
-        self.state = "bad"
+        self.state = "BAD"
+        self.CS_OUT.off()
         
     def run_reference(self):  # why does this method go when worker.start() is called?
         # running our process
@@ -731,8 +734,9 @@ class SendThread(QThread):
         
     # should i loop this a few times to make sure nRF receives it?
     def send_bytes(self, value):  # sending single int to indicate state
-        self.nRF.write(struct.pack("f", 999))
-        self.nRF.write(struct.pack("f", value))
+        for i in range(5):  # looped a few times to ensure nRF receives it
+            self.nRF.write(struct.pack("f", 999))
+            self.nRF.write(struct.pack("f", value))
         self.nRF.write(struct.pack("f", 666))
 
 
@@ -740,9 +744,10 @@ if __name__ == "__main__":
     import sys
     nRF = serial.Serial("/dev/ttyS0", 10000, timeout=0.3)
     #nRF = serial.Serial("/dev/ttyACM0", 10000, timeout=0.3)
+    CS_OUT = LED(23)
     app = QtWidgets.QApplication(sys.argv)
     Goomba = QtWidgets.QWidget()
-    ui = Ui_Goomba(nRF)
+    ui = Ui_Goomba(nRF, CS_OUT)
     ui.setupUi(Goomba)
     Goomba.show()
     sys.exit(app.exec_())

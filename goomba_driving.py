@@ -155,7 +155,7 @@ class state_machine():
         motor_level(speed, self.mot1)
         motor_level(speed, self.mot2)
 
-    def idle(self, ignite):
+    def idle(self, ignite):  # may want to change how idle is handled, consolidate to locate
         motor_level(0, self.mot1)
         motor_level(0, self.mot2)
         if ignite is True:
@@ -168,7 +168,7 @@ class state_machine():
         thing[2] = self.accel.acceleration
         thing[3] = self.grab_sonar()
         thing[4] = [float(self.cliff_dist()), 0, 0]
-        if self.state == "LOCATE":
+        if self.state == "LOCATE":  # TODO mod this to make universal method for timer event. maybe take input for when there's a timer event
             self.state = "FORWARD"
             thing[4][1] = 0
         elif self.state == "TURN":
@@ -287,9 +287,9 @@ start_button = None
 
 # creating instance of state machine
 goomba = state_machine(motL, motR, encL, encR, lis3, lsm6, IR, sonar, rpi_serial)
-if testing:
-    goomba.test = True
 while True:  # actual main loop
+    if testing:
+        goomba.test = True
     ble.start_advertising(advertisement)
     while not ble.connected:  # for testing while connected
         goomba.test_print()
@@ -316,18 +316,23 @@ while True:  # actual main loop
                     motor_test(motL, motR, duration)
                 elif uart_test1 == "Y":
                     c_det = int(goomba.cliff_det())
-                    o = [lis3.magnetic, encs, lsm6.acceleration, dists, (c_det, 0, 3)]
+                    o = [lis3.magnetic, encs, lsm6.acceleration, dists, (c_det, 4, 4)]
                     goomba.send_bytes(o)
                     print(o)
 
         if RPI_CS.value is True:  # idea for signalling when to read from RPi
-            data = [0, 0, 0]
-            er = [0, 0, 0]
+            data = []
+            er = []
+            data_in = None
             print("RPi sending data!")
-            for i in range(3):
-                data[i], er[i] = goomba.read_uart()
+            while data_in != 666:  # read until end signal
+                data_in_raw, er_in = goomba.read_uart()
+                data_in = int(data_in_raw)
+                data.append(data_in)
+                er.append(er_in)
+                if len(data) > 8:  # in case of no end signal
+                    break
             print(data)
-
 
     while ble.connected:
         if testing:
@@ -369,12 +374,12 @@ while True:  # actual main loop
                     if packet.button == B1:
                         start_button = True
                         print("Button 1 pressed! It was a reset?!")
-                    elif packet.button == B2:
+                    elif packet.button == B2:  # TODO consolidate this by making universal locate method
                         print("Button 2 pressed! Data by UART WIP.")
                         c_det = goomba.cliff_dist()  # acts independently and doesn't use locate -> doesn't change state
                         dists = goomba.grab_sonar()  # could modify locate to handle timer event
                         encs = (goomba.encL.position, goomba.encR.position)
-                        o = [lis3.magnetic, encs, lsm6.acceleration, dists, (c_det, 0, 3)]
+                        o = [lis3.magnetic, encs, lsm6.acceleration, dists, (c_det, 4, 4)]
                         goomba.send_bytes(o)
                     elif packet.button == B3:
                         print("Button 3 pressed! Toggled print statements.")
