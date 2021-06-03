@@ -7,7 +7,9 @@
 #   v0.91 11-Apr-2021 Added sharp-gp2y0a21yk0f cliff sensor functionality and bluetooth
 #   v1.00 29-Apr-2021 QoL updates for testing, fixed data reording, final pin assignments, working state machine
 #   v1.01 29-Apr-2021 Prep for RPi - USB serial communication?
-
+#   v1.02 02-Jun-2021 More prep for serial communication and updated state machine event handling
+#                     - Note 1: Eventually use RF transmission for video so no internet connection required?
+#                     - Note 2: Is USB comm possible while also running Mu & REPL viua USB?
 import board
 from board import SCL, SDA, SCK, MOSI, MISO, RX, TX
 import pwmio
@@ -132,10 +134,16 @@ class state_machine():
     origins = []
     test = False
     # independent timer event 
-    EVENT_NONE = 0
-    EVENT_TIMER = 1
     DATA_SEND_INTERVAL = 0.3
     timer_time = None
+    # states, could make into dictionary
+    LOCATE = 0
+    FORWARD = 1
+    TURN_LEFT = 2
+    TURN_RIGHT = 3
+    TEST = 4
+    BAD_DIRECTION = 9
+    TIMER = 1
 
     def __init__(self, motL, motR, encL, encR, magneto, accel, cliff, sonar, rpi_serial):
         self.state = self.start
@@ -155,31 +163,59 @@ class state_machine():
         motor_level(speed, self.mot1)
         motor_level(speed, self.mot2)
 
-    def idle(self, ignite):
-        motor_level(0, self.mot1)
-        motor_level(0, self.mot2)
-        if ignite is True:
-            self.state = "LOCATE"
-
-    def locate(self):  # formats sensor data to be sent & changes state
+    def locate(self, timer, ignite):  # formats sensor data to be sent & changes state
         thing = [(0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0)]
         thing[0] = self.magnet.magnetic
         thing[1] = (self.encL.position, self.encR.position)
         thing[2] = self.accel.acceleration
-        thing[3] = self.grab_sonar()
+        thing[3] = self.grab_sonar()  # note: comes in list instead of tuple unlike others
         thing[4] = [float(self.cliff_dist()), 0, 0]
+        if timer:
+            comm, tim = self.get_state()
+        elif timer is not True:
+            comm, tim = self.state_change(ignite)
+        else:
+            error("State change handled incorrectly")
+        thing[4][1] = comm
+        thing[4][2] = tim
+        return thing
+    
+    def get_state(self):  # TODO include test button event
+        if self.state == "LOCATE":
+            return (self.LOCATE, 1)
+        elif self.state == "TURN":
+            if goomba.go == "LEFT":
+                return (self.TURN_LEFT, 1)
+            elif goomba.go == "RIGHT":
+                return (self.TURN_RIGHT, 1)
+            else:
+                error("Locate state change handled incorrectly")
+                return (self.BAD_DIRECTION, 1)  # error integer
+        elif self.state == "FORWARD":
+            return (self.FORWARD, 1)
+
+    def state_change(self, ignite):
+        if (ignite is True) and (self.state == "IDLE"):
+            self.state = "LOCATE"
+        elif (ignite is True) and (self.state != "IDLE"):
+            self.state = "IDLE"
         if self.state == "LOCATE":
             self.state = "FORWARD"
-            thing[4][1] = 0
+            return (self.LOCATE, 0)
         elif self.state == "TURN":
             self.state = "FORWARD"
-            thing[4][1] = 2
-        else:
+            if goomba.go == "LEFT":
+                return (self.TURN_LEFT, 0)
+            elif goomba.go == "RIGHT":
+                return (self.TURN_RIGHT, 0)
+            else:
+                error("Turn state change handled incorrectly")
+                return (self.BAD_DIRECTION, 0)  # error integer
+        elif self.state == "FORWARD":
             self.state = "TURN"
-            thing[4][1] = 1
-        return thing
-
-    def turn(self, direction, mag=50):
+            return (self.FORWARD, 0)
+        
+    def turn(self, direction, mag=60):
         direc = str(direction).upper()
         if direc == "LEFT":
             motor_level(mag, motL)
@@ -247,19 +283,22 @@ class state_machine():
     def timer_event(self):
         if (self.timer_time is not None) and time.monotonic() >= self.timer_time:
             self.timer_time = None
-            return self.EVENT_TIMER
+            self.evt_handler(timer=True)
+            if self.test:
+                print(goomba.state)
+            return True
         else:
-            return self.EVENT_NONE
+            return False
 
     def timer_set(self):
         self.timer_time = time.monotonic() + self.DATA_SEND_INTERVAL
 
-    def evt_handler(self):
-        o = self.locate()  # changes state and grabs sensor data
-        self.origins.append(o)  # stores sensor data
+    def evt_handler(self, timer=False, ignite=False):
+        o = self.locate(timer, ignite)  # changes state and grabs sensor data
+        #self.origins.append(o)  # stores sensor data locally
         self.send_bytes(o)  # sends data
         self.timer_set()  # resets timer
-        if self.test:
+        if testing2:
             print(o)
     
     def test_print(self):
@@ -276,7 +315,7 @@ class state_machine():
 testing = True  # to show state
 testing2 = False  # to show sensor data
 print_time = .5
-test_q = "Y"
+test_q = "SKIP"
 
 # initializing variables
 last = time.monotonic()
@@ -287,15 +326,12 @@ start_button = None
 
 # creating instance of state machine
 goomba = state_machine(motL, motR, encL, encR, lis3, lsm6, IR, sonar, rpi_serial)
-if testing:
-    goomba.test = True
 while True:  # actual main loop
+    if testing:
+        goomba.test = True
     ble.start_advertising(advertisement)
-    while not ble.connected:  # for testing while connected
+    while not ble.connected:  # for testing while no bluetooth
         goomba.test_print()
-        dists = goomba.grab_sonar()
-        encs = [encL.position, encR.position]
-        cliff = goomba.cliff_dist()
 
         time.sleep(print_time)
         if test_q != "SKIP":
@@ -303,7 +339,7 @@ while True:  # actual main loop
             mot_test1 = mot_test0.upper()
             test_q = mot_test0.upper()
             if (mot_test1 == "END"):
-                break
+                break  # redundant w/ ctrl+c shortcut
             if mot_test1 != "SKIP":
                 uart_test0 = input("Test UART? \nY or N ")
                 uart_test1 = uart_test0.upper()
@@ -314,30 +350,38 @@ while True:  # actual main loop
                 elif mot_test1 == "Y":
                     duration = float(input("How long? "))
                     motor_test(motL, motR, duration)
-                elif uart_test1 == "Y":
+                elif uart_test1 == "Y":    # TODO add test button event
+                    dists = goomba.grab_sonar()
+                    encs = [encL.position, encR.position]
+                    cliff = goomba.cliff_dist()
                     c_det = int(goomba.cliff_det())
-                    o = [lis3.magnetic, encs, lsm6.acceleration, dists, (c_det, 0, 3)]
+                    o = [lis3.magnetic, encs, lsm6.acceleration, dists, (c_det, 4, 4)]
                     goomba.send_bytes(o)
                     print(o)
 
-        if RPI_CS.value is True:  # idea for signalling when to read from RPi
-            data = [0, 0, 0]
-            er = [0, 0, 0]
+# idea for signalling when to read from RPi
+        if RPI_CS.value is True:  # make this into a function?
+            data = []
+            er = []
+            data_in = None
             print("RPi sending data!")
-            for i in range(3):
-                data[i], er[i] = goomba.read_uart()
+            while data_in != 666:  # read until end signal
+                data_in_raw, er_in = goomba.read_uart()
+                data_in = int(data_in_raw)
+                data.append(data_in)
+                er.append(er_in)
+                if len(data) > 8:  # in case of no end signal
+                    break
             print(data)
-
 
     while ble.connected:
         if testing:
             if time.monotonic() - last > print_time:
-                print(goomba.state)
                 last = time.monotonic()
-                if testing2:
-                    goomba.test_print()
                 if goomba.state == "TURN":
                     print(goomba.go)
+                if testing2:
+                    goomba.test_print()
         if RPI_CS is True:  # initial version of read functionality
             rpi_in, er = goomba.read_uart()
             if int(rpi_in) == 666:  # received start signal
@@ -350,8 +394,10 @@ while True:  # actual main loop
                         goomba.state == "FORWARD"
                     elif new_state == 2:
                         goomba.state == "TURN"
+                        goomba.go == "RIGHT"
                     elif new_state == 3:
                         goomba.state == "TURN"
+                        goomba.go == "LEFT"
                     elif new_state == 4:
                         goomba.state == "LOCATE"
                     elif new_state == 5:
@@ -359,6 +405,7 @@ while True:  # actual main loop
                         print("\"bad\" sent from RPi. Check SendThread class")
                     else:
                         print("Invalid state from RPi")
+                        goomba.state == "IDLE"
                 else:
                     print("Signal interrupted from RPi")
 
@@ -369,60 +416,51 @@ while True:  # actual main loop
                     if packet.button == B1:
                         start_button = True
                         print("Button 1 pressed! It was a reset?!")
-                    elif packet.button == B2:
+                    elif packet.button == B2:  # TODO add test button event
                         print("Button 2 pressed! Data by UART WIP.")
-                        c_det = goomba.cliff_dist()  # acts independently and doesn't use locate -> doesn't change state
-                        dists = goomba.grab_sonar()  # could modify locate to handle timer event
+                        c_det = goomba.cliff_dist() 
+                        dists = goomba.grab_sonar()  
                         encs = (goomba.encL.position, goomba.encR.position)
-                        o = [lis3.magnetic, encs, lsm6.acceleration, dists, (c_det, 0, 3)]
+                        o = [lis3.magnetic, encs, lsm6.acceleration, dists, (c_det, 4, 4)]
                         goomba.send_bytes(o)
                     elif packet.button == B3:
-                        print("Button 3 pressed! Toggled print statements.")
-                        testing = not testing
-                        testing2 = not testing2
+                        print("Button 3 pressed! Toggled both print statements.")
+                        testing = not testing  # fully disables state w/ data
+                        testing2 = testing
+                        goomba.test = not goomba.test
+                    elif packet.button == B4:
+                        print("Button 4 pressed! Alternated print statements.")
+                        testing = not testing  # alternates state and data
+                        testing2 = not testing
                         goomba.test = not goomba.test
 
         if goomba.state == "IDLE":
-            goomba.idle(start_button)
+            goomba.forward(speed=0)
+            if start_button:
+                goomba.evt_handler(ignite=start_button)
             start_button = False
-        elif goomba.state == "LOCATE":
-            goomba.evt_handler()
 
         if goomba.state != "IDLE":
-            if goomba.timer_time is None:  # timer acts independently and does not use locate -> doesn't change state
+            if goomba.timer_time is None:
                 goomba.timer_set()
-            if goomba.timer_event() == goomba.EVENT_TIMER:
-                c_det = goomba.cliff_dist()
-                dists = goomba.grab_sonar()
-                encs = (goomba.encL.position, goomba.encR.position)
-                if goomba.state == "FORWARD":
-                    comm = 1
-                if goomba.state == "TURN":
-                    if goomba.go == "LEFT":
-                        comm = 2
-                    elif goomba.go == "RIGHT":
-                        comm = 3
-                    else:
-                        comm = 9  # error integer
-                o = [lis3.magnetic, encs, lsm6.acceleration, dists, (c_det, comm, 1)]
-                goomba.send_bytes(o)
+            goomba.timer_event()
 
         if goomba.state == "FORWARD":
             goomba.forward()
             distL, distF, distR = goomba.grab_sonar()
-            if (distF <= s_thold):
+            if (distR <= s_thold) and (distF <= s_thold):
                 goomba.evt_handler()
-                goomba.go = "RIGHT"
+                goomba.go = "LEFT"
             elif (distL <= s_thold) and (distF <= s_thold):
                 goomba.evt_handler()
                 goomba.go = "RIGHT"
-            elif (distR <= s_thold) and (distF <= s_thold):
-                goomba.evt_handler()
-                goomba.go = "LEFT"
-            elif goomba.cliff_det() is True:
+            elif (distF <= s_thold):
                 goomba.evt_handler()
                 goomba.go = "RIGHT"
-            elif start_button is True:  # only used by bluetooth
+            if goomba.cliff_det() is True:
+                goomba.evt_handler()
+                goomba.go = "RIGHT"
+            if start_button is True:  # only used by bluetooth
                 goomba.state = "IDLE"
                 start_button = False
 
