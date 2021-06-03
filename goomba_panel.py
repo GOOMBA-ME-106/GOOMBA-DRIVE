@@ -2,7 +2,8 @@
 # referenced module for rpi_main to launch GUI and multithreading
 #
 # Written by Ryan Sands (sandsryanj@gmail.com)
-#   v1.00 05-May-2021 First draft. reads from uart, interprets and sends to correct labels
+#   v1.00 05-May-2021 First draft. reads data, interprets and sends to correct labels
+#   v1.00 05-May-2021 First draft. reads data, interprets and sends to correct labels
 #                        additionally sends a single integer signal to change state of nRF
 # Notes:
 #  Using the designer, it makes an interconnected web of layouts much simpler to do.
@@ -689,7 +690,7 @@ class ReadThread(QThread):
 
 class SendThread(QThread):
     update_progress = pyqtSignal(int)
-    #nRF = serial.Serial("/dev/ttyS0", 15000, timeout=0.3)
+    #nRF = serial.Serial("/dev/ttyS0", 20000, timeout=0.3)
 
     def __init__(self, nRF, CS, state="BAD"):  # allows us to pass arguements into class
         super().__init__()
@@ -721,18 +722,16 @@ class SendThread(QThread):
         self.state = "BAD"
         self.CS_OUT.off()
         
-    def run_reference(self):  # why does this method go when worker.start() is called?
-        # running our process
-        # note can't call method in separate class
+    def run_reference(self):  # why does this method go when instance.start() is called?
+        # note can't call run method externally
         # this thread has a finished signal we can catch in main class
         self.update_progress.emit(123)
         for x in range(12):
             self.update_progress.emit(x)
             time.sleep(0.1)
         self.worker_complete.emit([(1, 0, 1.1), (1, 2, 3)])  # emitted at same time as finish signal
-        # this is where we get each piece of data and send in an ordered manner to gui
+        # allows us to pass info at same time as end signal
         
-    # should i loop this a few times to make sure nRF receives it?
     def send_bytes(self, value):  # sending single int to indicate state
         for i in range(5):  # looped a few times to ensure nRF receives it
             self.nRF.write(struct.pack("f", 999))
@@ -742,8 +741,8 @@ class SendThread(QThread):
 
 if __name__ == "__main__":
     import sys
-    nRF = serial.Serial("/dev/ttyS0", 10000, timeout=0.3)
-    #nRF = serial.Serial("/dev/ttyACM0", 10000, timeout=0.3)
+    nRF = serial.Serial("/dev/ttyS0", 20000, timeout=0.3)
+    #nRF = serial.Serial("/dev/ttyACM0", 20000, timeout=0.3)  # USB port?
     CS_OUT = LED(23)
     app = QtWidgets.QApplication(sys.argv)
     Goomba = QtWidgets.QWidget()

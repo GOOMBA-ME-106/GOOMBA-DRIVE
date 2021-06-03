@@ -7,7 +7,9 @@
 #   v0.91 11-Apr-2021 Added sharp-gp2y0a21yk0f cliff sensor functionality and bluetooth
 #   v1.00 29-Apr-2021 QoL updates for testing, fixed data reording, final pin assignments, working state machine
 #   v1.01 29-Apr-2021 Prep for RPi - USB serial communication?
-
+#   v1.02 02-Jun-2021 More prep for serial communication and updated state machine event handling
+#                     - Note 1: Eventually use RF transmission for video so no internet connection required?
+#                     - Note 2: Is USB comm possible while also running Mu & REPL viua USB?
 import board
 from board import SCL, SDA, SCK, MOSI, MISO, RX, TX
 import pwmio
@@ -178,7 +180,7 @@ class state_machine():
         thing[4][2] = tim
         return thing
     
-    def get_state(self):
+    def get_state(self):  # TODO include test button event
         if self.state == "LOCATE":
             return (self.LOCATE, 1)
         elif self.state == "TURN":
@@ -356,7 +358,7 @@ while True:  # actual main loop
                     o = [lis3.magnetic, encs, lsm6.acceleration, dists, (c_det, 4, 4)]
                     goomba.send_bytes(o)
                     print(o)
-                    
+
 # idea for signalling when to read from RPi
         if RPI_CS.value is True:  # make this into a function?
             data = []
