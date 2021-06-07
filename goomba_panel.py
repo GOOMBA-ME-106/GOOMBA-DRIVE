@@ -21,6 +21,8 @@ import serial
 import struct
 from math import cos, sin, atan2, degrees
 
+import csv, os  # ez way to store data
+
 from gpiozero import LED  # for chip select operation
 
 
@@ -49,6 +51,9 @@ class Ui_Goomba(object):
     encR_prev = 0
     ang_prev = 0
     ang_now = 0
+
+    file_name = "goomba_data_0.0"
+    print_path = True
     
     def __init__(self, nRF, CS):  # should allow us to pass arguements into class
         super().__init__()
@@ -440,6 +445,7 @@ class Ui_Goomba(object):
 
     def custom(self):  # stuff to execute after building gui
         self.label_17.setText("0.0")
+        self.file_name = self.new_file(self.file_name)  # creates output csv file
         self.reader = ReadThread(self.nRF)
         self.reader.start()
         self.reader.update_progress.connect(self.sensor2label)
@@ -579,6 +585,33 @@ class Ui_Goomba(object):
         except IndexError as e:
             print("Incomplete signal:", e)
 
+        self.csv_handler(self.file_name, vals)  # appends to csv
+    
+    def csv_handler(self, file, data_row):
+        isfile = os.path.isfile(file)
+        if isfile:
+            tableFile = open(file, 'a', newline='\n')  # appends existing
+        else:
+            tableFile = open(file, 'w', newline='\n')  # overwrites existing
+        writer = csv.writer(tableFile, delimiter=',')
+        writer.writerow(data_row)
+        tableFile.close()
+        if self.print_path:
+            print("Output csv to\n", os.path.abspath(file))
+            self.print_path = not self.print_path
+
+    def new_file(self, base_name):
+        file_csv = base_name + ".csv"
+        isfile = os.path.isfile(file_csv)
+        i = 0
+        while isfile:  # creates new csv if prior data found
+            new_name = base_name+str(i)
+            isfile = os.path.isfile(new_name+".csv")
+            if not isfile:
+                base_name = new_name
+            i += 1
+        return base_name + ".csv"
+
     def vector_2_degrees(self, x, y):
         angle = degrees(atan2(y, x))
         if angle < 0:
@@ -600,10 +633,10 @@ class Ui_Goomba(object):
         ang_rad = ang * (3.141592 / 180) + prior_ang
         return ang_rad
     
-    def send_finish(self):
+    def send_finish(self):  # unused
         self.buttonBox.setStyleSheet(self.green)
 
-    def error_alert(self, nut):
+    def error_alert(self, nut):  # unused
         # do stuff on signal that process is done
         QMessageBox.information(self, "Uh oh, error:\n" + nut)
 
@@ -698,7 +731,7 @@ class SendThread(QThread):
         self.state = state
         self.CS_OUT = CS
 
-    def run(self):  # TODO take button presh to send state change to nRF
+    def run(self):  # TODO take button press to send state change to nRF
         # take a value to indicate which state to send
         # turn GPIO digital out high
         self.update_progress.emit(1)
@@ -718,7 +751,7 @@ class SendThread(QThread):
             print("Did not pass in new state")
         else:  # error case
             val = 5
-        self.send_bytes(val)
+        self.send_bytes(val)  # maybe loop using the function instead of in function
         self.state = "BAD"
         self.CS_OUT.off()
         
