@@ -7,9 +7,7 @@
 #   v0.91 11-Apr-2021 Added sharp-gp2y0a21yk0f cliff sensor functionality and bluetooth
 #   v1.00 29-Apr-2021 QoL updates for testing, fixed data reording, final pin assignments, working state machine
 #   v1.01 29-Apr-2021 Prep for RPi - USB serial communication?
-#   v1.02 02-Jun-2021 More prep for serial communication and updated state machine event handling
-#                     - Note 1: Eventually use RF transmission for video so no internet connection required?
-#                     - Note 2: Is USB comm possible while also running Mu & REPL viua USB?
+
 import board
 from board import SCL, SDA, SCK, MOSI, MISO, RX, TX
 import pwmio
@@ -133,10 +131,10 @@ class state_machine():
     start = "IDLE"
     origins = []
     test = False
-    # independent timer event 
+    # independent timer event
     DATA_SEND_INTERVAL = 0.3
     timer_time = None
-    # states, could make into dictionary
+    # states
     LOCATE = 0
     FORWARD = 1
     TURN_LEFT = 2
@@ -168,7 +166,7 @@ class state_machine():
         thing[0] = self.magnet.magnetic
         thing[1] = (self.encL.position, self.encR.position)
         thing[2] = self.accel.acceleration
-        thing[3] = self.grab_sonar()  # note: comes in list instead of tuple unlike others
+        thing[3] = self.grab_sonar()
         thing[4] = [float(self.cliff_dist()), 0, 0]
         if timer:
             comm, tim = self.get_state()
@@ -179,8 +177,8 @@ class state_machine():
         thing[4][1] = comm
         thing[4][2] = tim
         return thing
-    
-    def get_state(self):  # TODO include test button event
+
+    def get_state(self):
         if self.state == "LOCATE":
             return (self.LOCATE, 1)
         elif self.state == "TURN":
@@ -201,8 +199,8 @@ class state_machine():
             self.state = "IDLE"
         if self.state == "LOCATE":
             self.state = "FORWARD"
-            return (self.LOCATE, 0)
-        elif self.state == "TURN":
+            return (self.LOCATE, 0)  # thsi results in state number paired w/ data that trggered state change
+        elif self.state == "TURN":  # TODO FIX ??
             self.state = "FORWARD"
             if goomba.go == "LEFT":
                 return (self.TURN_LEFT, 0)
@@ -214,7 +212,7 @@ class state_machine():
         elif self.state == "FORWARD":
             self.state = "TURN"
             return (self.FORWARD, 0)
-        
+
     def turn(self, direction, mag=60):
         direc = str(direction).upper()
         if direc == "LEFT":
@@ -267,6 +265,7 @@ class state_machine():
         for count0, d_list in enumerate(origin_data):
             for value in d_list:
                 self.serial.write(bytes(struct.pack("d", float(value))))  # use struct.unpack to get float back
+                time.sleep(0.001)
 
     def read_uart(self, numbytes=4):
         data = self.serial.read(numbytes)
@@ -279,7 +278,7 @@ class state_machine():
                 print("Error message:", e)
                 er = e
         return (data_string, er)
-        
+
     def timer_event(self):
         if (self.timer_time is not None) and time.monotonic() >= self.timer_time:
             self.timer_time = None
@@ -295,12 +294,12 @@ class state_machine():
 
     def evt_handler(self, timer=False, ignite=False):
         o = self.locate(timer, ignite)  # changes state and grabs sensor data
-        #self.origins.append(o)  # stores sensor data locally
+        #self.origins.append(o)  # stores sensor data
         self.send_bytes(o)  # sends data
         self.timer_set()  # resets timer
         if testing2:
             print(o)
-    
+
     def test_print(self):
         print("Sonar distances:{0:10.2f}L {1:10.2f}F {2:10.2f}R (cm)".format(*self.grab_sonar()))
         encs = [self.encL.position, self.encR.position]
@@ -315,7 +314,7 @@ class state_machine():
 testing = True  # to show state
 testing2 = False  # to show sensor data
 print_time = .5
-test_q = "SKIP"
+test_q = "Y"
 
 # initializing variables
 last = time.monotonic()
@@ -330,8 +329,11 @@ while True:  # actual main loop
     if testing:
         goomba.test = True
     ble.start_advertising(advertisement)
-    while not ble.connected:  # for testing while no bluetooth
+    while not ble.connected:  # for testing while connected
         goomba.test_print()
+        dists = goomba.grab_sonar()
+        encs = [encL.position, encR.position]
+        cliff = goomba.cliff_dist()
 
         time.sleep(print_time)
         if test_q != "SKIP":
@@ -339,7 +341,7 @@ while True:  # actual main loop
             mot_test1 = mot_test0.upper()
             test_q = mot_test0.upper()
             if (mot_test1 == "END"):
-                break  # redundant w/ ctrl+c shortcut
+                break
             if mot_test1 != "SKIP":
                 uart_test0 = input("Test UART? \nY or N ")
                 uart_test1 = uart_test0.upper()
@@ -350,18 +352,20 @@ while True:  # actual main loop
                 elif mot_test1 == "Y":
                     duration = float(input("How long? "))
                     motor_test(motL, motR, duration)
-                elif uart_test1 == "Y":    # TODO add test button event
-                    dists = goomba.grab_sonar()
-                    encs = [encL.position, encR.position]
-                    cliff = goomba.cliff_dist()
+                elif uart_test1 == "Y":
                     c_det = int(goomba.cliff_det())
+                    goomba.serial.write(bytes(struct.pack("d", float(0))))
+                    goomba.serial.write(bytes(struct.pack("d", float(0))))
+                    goomba.serial.write(bytes(struct.pack("d", float(666))))
                     o = [lis3.magnetic, encs, lsm6.acceleration, dists, (c_det, 4, 4)]
                     goomba.send_bytes(o)
                     print(o)
+                    goomba.serial.write(bytes(struct.pack("d", float(999))))
+                    goomba.serial.write(bytes(struct.pack("d", float(999))))
+                    goomba.serial.write(bytes(struct.pack("d", float(999))))
 
-# idea for signalling when to read from RPi
-        if RPI_CS.value is True:  # make this into a function?
-            data = []
+        if RPI_CS.value is True:  # idea for signalling when to read from RPi
+            data = []  # make this into a function?
             er = []
             data_in = None
             print("RPi sending data!")
@@ -416,20 +420,20 @@ while True:  # actual main loop
                     if packet.button == B1:
                         start_button = True
                         print("Button 1 pressed! It was a reset?!")
-                    elif packet.button == B2:  # TODO add test button event
+                    elif packet.button == B2:  # TODO consolidate this by making universal locate method
                         print("Button 2 pressed! Data by UART WIP.")
-                        c_det = goomba.cliff_dist() 
-                        dists = goomba.grab_sonar()  
+                        c_det = goomba.cliff_dist()  # acts independently and doesn't use locate -> doesn't change state
+                        dists = goomba.grab_sonar()  # could modify locate to handle timer event
                         encs = (goomba.encL.position, goomba.encR.position)
                         o = [lis3.magnetic, encs, lsm6.acceleration, dists, (c_det, 4, 4)]
                         goomba.send_bytes(o)
                     elif packet.button == B3:
-                        print("Button 3 pressed! Toggled both print statements.")
+                        print("Button 3 pressed! Toggled print statements.")
                         testing = not testing  # fully disables state w/ data
                         testing2 = testing
                         goomba.test = not goomba.test
                     elif packet.button == B4:
-                        print("Button 4 pressed! Alternated print statements.")
+                        print("Button 4 pressed! Toggled print statements v2.")
                         testing = not testing  # alternates state and data
                         testing2 = not testing
                         goomba.test = not goomba.test
@@ -441,7 +445,7 @@ while True:  # actual main loop
             start_button = False
 
         if goomba.state != "IDLE":
-            if goomba.timer_time is None:
+            if goomba.timer_time is None:  # timer acts independently and does not use locate -> doesn't change state
                 goomba.timer_set()
             goomba.timer_event()
 

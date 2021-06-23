@@ -690,8 +690,8 @@ class ReadThread(QThread):
             detect_end = 0
             while detect_start != 666:  # throws away data until it receives start
                 received, er = self.read_uart()
-                print(received)
                 if received is not None:
+                    print(received)
                     detect_start = int(received[0])
                     print(detect_start)
                 else:
@@ -715,7 +715,7 @@ class ReadThread(QThread):
             try:
                 data_string = struct.unpack("d", data)
             except Exception as e:
-                print("Error message:", e)
+                #print("Error message:", e)
                 er = e
         return (data_string, er)
         # print(data_string) gives (123.0,) as out, how to interpret?
