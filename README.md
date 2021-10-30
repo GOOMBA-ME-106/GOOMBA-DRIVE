@@ -1,6 +1,9 @@
 # GOOMBA-DRIVE
 Main program to drive the goomba (two wheeled vehicle meant to automatically map the floor plan of a room).
 
+## Installation
+Extract the contents of the rpi folder to your desired location in the raspberry pi. Run it via the steps detailed at the bottom of this file. Extract the nRF52840 folder contents to your feather board and rename it as code.py. Run the program via Mu.
+
 ## Sensors
 Consists of 3 sonar sensors to the front and sides along with an IR proximity sensor to sense cliffs.
 A magentomneter is also used to verify angle of the goomba.
